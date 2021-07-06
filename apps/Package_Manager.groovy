@@ -7,14 +7,23 @@
  *    If you find this useful, donations are always appreciated 
  *    https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url
  *
+ *
+
+ *    csteele v1.8.2.A   Converted to using HubitatCommunity.com as the search resource. [Lines 66-67 & 379-380]
+ *                         added footer to display version and copyright fields.
  */
  
+	public static String version()      {  return "v1.8.2.A"  }
+	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
+
+
 definition(
 	name: "Hubitat Package Manager",
 	namespace: "dcm.hpm",
 	author: "Dominick Meglio",
 	description: "Provides a utility to maintain the apps and drivers on your Hubitat making both installation and updates easier",
 	category: "My Apps",
+	importUrl: "https://raw.githubusercontent.com/dcmeglio/hubitat-packagemanager/master/apps/Package_Manager.groovy",
 	iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
 	iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
 	iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
@@ -56,7 +65,8 @@ import java.util.regex.Matcher
 
 @Field static String repositoryListing = "https://raw.githubusercontent.com/dcmeglio/hubitat-packagerepositories/master/repositories.json"
 @Field static String settingsFile = "https://raw.githubusercontent.com/dcmeglio/hubitat-packagerepositories/master/settings.json"
-@Field static String searchApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
+//@Field static String searchApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
+@Field static String searchApiUrl = "http://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"
 @Field static List categories = [] 
 @Field static List allPackages = []
 @Field static def completedActions = [:]
@@ -288,6 +298,7 @@ def prefSettings(params) {
 						input "customRepo", "text", title: "Enter the URL of the repository's directory listing file", required: true
 				}
 			}
+      		display()
 		}
 	}
 }
@@ -312,6 +323,7 @@ def prefPkgInstall() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+      	display()
 	}
 }
 
@@ -332,6 +344,7 @@ def prefInstallRepositorySearch() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+      	display()
 	}
 }
 
@@ -365,6 +378,8 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
+				def pkg_tags = packageItem.tags[1..-2].tokenize(',')	// -- CSteele
+				packageItem.tags = pkg_tags 		// -- CSteele
 				packageItem << [author: repo.author, gitHubUrl: repo.gitHubUrl, payPalUrl: repo.payPalUrl, installed: state.manifests[packageItem.location] != null]
 				searchResults << packageItem
 			}
@@ -393,6 +408,7 @@ def prefInstallRepositorySearchResults() {
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 				input "btnBack", "button", title: "Back", width: 3
 			}
+      		display()
 			
 		}
 
@@ -416,6 +432,7 @@ def prefPkgInstallUrl() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+      	display()
 	}
 }
 
@@ -436,6 +453,7 @@ def prefPkgInstallRepository() {
 				paragraph "Refreshing repositories... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+      		display()
 		}
 	}
 	else {
@@ -561,6 +579,7 @@ def prefInstallChoices(params) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}    
 }
 
@@ -650,6 +669,7 @@ def prefInstallVerify() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -674,6 +694,7 @@ def prefInstall() {
 				paragraph "Your installation is currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+			display()
 		}
 	}
 	else {
@@ -855,6 +876,7 @@ def prefPkgModify() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -895,6 +917,7 @@ def prefPkgModifyChoices() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
+			display()
 		}
 	}
 	else {
@@ -907,6 +930,7 @@ def prefPkgModifyChoices() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
+			display()
 		}
 	}
 }
@@ -985,6 +1009,7 @@ def prefVerifyPackageChanges() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
+			display()
 		}
 	}
 	else {
@@ -998,6 +1023,7 @@ def prefVerifyPackageChanges() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
+			display()
 		}
 	}
 }
@@ -1022,6 +1048,7 @@ def prefMakePackageChanges() {
 				paragraph "Your changes are currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+			display()
 		}
 	}
 	else {
@@ -1129,6 +1156,7 @@ def prefPkgRepair() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -1156,6 +1184,7 @@ def prefPkgRepairExecute() {
 				paragraph "Your changes are currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+			display()
 		}
 	}
 	else {
@@ -1340,6 +1369,7 @@ def prefPkgUninstall() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -1374,6 +1404,7 @@ def prefPkgUninstallConfirm() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -1397,6 +1428,7 @@ def prefUninstall() {
 				paragraph "Your uninstall is currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+			display()
 		}
 	}
 	else {
@@ -1644,6 +1676,7 @@ def prefPkgUpdate() {
 					input "btnMainMenu", "button", title: "Main Menu", width: 3
 					
 				}
+				display()
 			}
 		}
 		else {
@@ -1702,6 +1735,7 @@ def prefPkgVerifyUpdates() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 def prefPkgUpdatesComplete() {
@@ -1732,6 +1766,7 @@ def prefPkgUpdatesComplete() {
 				paragraph "Installing updates... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+			display()
 		}
 	}
 	else {    
@@ -2141,6 +2176,7 @@ def prefPkgMatchUp() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
+			display()
 		}
 	}
 }
@@ -2165,6 +2201,7 @@ def prefPkgMatchUpVerify() {
 				paragraph "Matching packages... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
+			display()
 		}
 	}
 	else {
@@ -2190,6 +2227,7 @@ def prefPkgMatchUpVerify() {
 						paragraph "<hr>"
 						input "btnMainMenu", "button", title: "Main Menu", width: 3
 					}
+					display()
 				}
 			}            
 		}
@@ -2421,6 +2459,7 @@ def prefPkgView() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -2436,6 +2475,7 @@ def buildErrorPage(title, message) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
+		display()
 	}
 }
 
@@ -3717,6 +3757,7 @@ def displayFooter(){
 		paragraph getFormat("line")
 		paragraph "<div style='color:#1A77C9;text-align:center'>Hubitat Package Manager<br><a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url' target='_blank'><img src='https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg' border='0' alt='PayPal Logo'></a><br><br>Please consider donating. This app took a lot of work to make.<br>If you find it valuable, I'd certainly appreciate it!</div>"
 	}       
+      	display()
 }
 
 def hasTag(pkg, tag) {
@@ -3858,3 +3899,18 @@ def getAppList() {
 	}
 	return result
 }
+
+/*
+	display
+    
+	Purpose: Displays the title/copyright/version info
+
+	Notes: 	Not very exciting.
+*/
+def display() {
+	section{
+		paragraph "\n<hr style='background-color:#1A77C9; height: 1px; border: 0;'></hr>"
+		paragraph "<div style='color:#1A77C9;text-align:center;font-weight:small;font-size:9px'>Developed by: DCMeglio<br/>Current Version: ${version()} -  ${thisCopyright}</div>"
+	}
+}
+
