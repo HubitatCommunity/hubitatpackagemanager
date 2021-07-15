@@ -414,7 +414,7 @@ def prefInstallRepositorySearchResults() {
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 				input "btnBack", "button", title: "Back", width: 3
 			}
-      		display()
+      		display()	// -- CSteele
 			
 		}
 
@@ -438,7 +438,7 @@ def prefPkgInstallUrl() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-      	display()
+      	display()	// -- CSteele
 	}
 }
 
@@ -459,7 +459,7 @@ def prefPkgInstallRepository() {
 				paragraph "Refreshing repositories... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-      		display()
+      		display()	// -- CSteele
 		}
 	}
 	else {
@@ -585,7 +585,7 @@ def prefInstallChoices(params) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}    
 }
 
@@ -675,7 +675,7 @@ def prefInstallVerify() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -882,7 +882,7 @@ def prefPkgModify() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -923,7 +923,7 @@ def prefPkgModifyChoices() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {
@@ -936,7 +936,7 @@ def prefPkgModifyChoices() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 }
@@ -1015,7 +1015,7 @@ def prefVerifyPackageChanges() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1054,7 +1054,7 @@ def prefMakePackageChanges() {
 				paragraph "Your changes are currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1162,7 +1162,7 @@ def prefPkgRepair() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -1190,7 +1190,7 @@ def prefPkgRepairExecute() {
 				paragraph "Your changes are currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1375,7 +1375,7 @@ def prefPkgUninstall() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -1410,7 +1410,7 @@ def prefPkgUninstallConfirm() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -1434,7 +1434,7 @@ def prefUninstall() {
 				paragraph "Your uninstall is currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1682,7 +1682,7 @@ def prefPkgUpdate() {
 					input "btnMainMenu", "button", title: "Main Menu", width: 3
 					
 				}
-				display()
+				display()	// -- CSteele
 			}
 		}
 		else {
@@ -1741,7 +1741,7 @@ def prefPkgVerifyUpdates() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 def prefPkgUpdatesComplete() {
@@ -1772,7 +1772,7 @@ def prefPkgUpdatesComplete() {
 				paragraph "Installing updates... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {    
@@ -2182,7 +2182,7 @@ def prefPkgMatchUp() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 }
@@ -2207,7 +2207,7 @@ def prefPkgMatchUpVerify() {
 				paragraph "Matching packages... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()
+			display()	// -- CSteele
 		}
 	}
 	else {
@@ -2233,7 +2233,7 @@ def prefPkgMatchUpVerify() {
 						paragraph "<hr>"
 						input "btnMainMenu", "button", title: "Main Menu", width: 3
 					}
-					display()
+					display()	// -- CSteele
 				}
 			}            
 		}
@@ -2465,7 +2465,7 @@ def prefPkgView() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -2481,7 +2481,7 @@ def buildErrorPage(title, message) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()
+		display()	// -- CSteele
 	}
 }
 
@@ -3763,7 +3763,7 @@ def displayFooter(){
 		paragraph getFormat("line")
 		paragraph "<div style='color:#1A77C9;text-align:center'>Hubitat Package Manager<br><a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url' target='_blank'><img src='https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg' border='0' alt='PayPal Logo'></a><br><br>Please consider donating. This app took a lot of work to make.<br>If you find it valuable, I'd certainly appreciate it!</div>"
 	}       
-      	display()
+      	display()	// -- CSteele
 }
 
 def hasTag(pkg, tag) {
@@ -3907,7 +3907,7 @@ def getAppList() {
 }
 
 /*
-	display
+	display	// -- CSteele
     
 	Purpose: Displays the title/copyright/version info
 
