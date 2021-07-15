@@ -8,9 +8,10 @@
  *    https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url
  *
  *
-
+ *
  *    csteele v1.8.2.A   Converted to using HubitatCommunity.com as the search resource. [Lines 66-67 & 379-380]
  *                         added footer to display version and copyright fields.
+ *                         added feature to identify Azure search vs sql search.
  */
  
 	public static String version()      {  return "v1.8.2.A"  }
@@ -94,6 +95,7 @@ import java.util.regex.Matcher
 @Field static List packagesMatchingInstalledEntries = []
 
 @Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN"]
+@Field static String srchSource = "SQL"  // -- CSteele
 
 def installed() {
 	initialize()
@@ -113,6 +115,8 @@ def initialize() {
 	schedule("00 ${timeOfDayForUpdateChecks.minutes} ${timeOfDayForUpdateChecks.hours} ? * *", checkForUpdates)
 	
 	performMigrations()
+
+	if (searchApiUrl ==~ /.*azure.*/) { srchSource = "Azure" } // -- CSteele
 }
 
 def uninstalled() {
@@ -337,7 +341,7 @@ def prefInstallRepositorySearch() {
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader()
 		section {
-			paragraph "<b>Search</b>"
+			paragraph "<b>Search</b> by $srchSource"	// -- CSteele
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
 		}
 		section {
@@ -378,8 +382,10 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
-				def pkg_tags = packageItem.tags[1..-2].tokenize(',')	// -- CSteele
-				packageItem.tags = pkg_tags 		// -- CSteele
+				if (srchSource ==~ /SQL /) {
+					def pkg_tags = packageItem.tags[1..-2].tokenize(',')	// -- CSteele
+					packageItem.tags = pkg_tags 		// -- CSteele
+				}
 				packageItem << [author: repo.author, gitHubUrl: repo.gitHubUrl, payPalUrl: repo.payPalUrl, installed: state.manifests[packageItem.location] != null]
 				searchResults << packageItem
 			}
@@ -389,7 +395,7 @@ def prefInstallRepositorySearchResults() {
 			displayHeader()
 			
 			section {
-				paragraph "<b>Search Results for ${pkgSearch}</b>"
+				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSource"
 				addCss()
 			}    
 			section {
