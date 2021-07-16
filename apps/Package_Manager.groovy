@@ -66,8 +66,8 @@ import java.util.regex.Matcher
 
 @Field static String repositoryListing = "https://raw.githubusercontent.com/dcmeglio/hubitat-packagerepositories/master/repositories.json"
 @Field static String settingsFile = "https://raw.githubusercontent.com/dcmeglio/hubitat-packagerepositories/master/settings.json"
-//@Field static String searchApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
-@Field static String searchApiUrl = "http://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"
+@Field static String searchFuzzyApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"  // -- CSteele
+@Field static String searchFastApiUrl = "http://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"  // -- CSteele
 @Field static List categories = [] 
 @Field static List allPackages = []
 @Field static def completedActions = [:]
@@ -95,7 +95,8 @@ import java.util.regex.Matcher
 @Field static List packagesMatchingInstalledEntries = []
 
 @Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN"]
-@Field static String srchSource = "SQL"  // -- CSteele
+@Field static String srchSrcTxt = "Fuzzy"  // -- CSteele
+@Field static String searchApiUrl = ""	// -- CSteele
 
 def installed() {
 	initialize()
@@ -115,8 +116,6 @@ def initialize() {
 	schedule("00 ${timeOfDayForUpdateChecks.minutes} ${timeOfDayForUpdateChecks.hours} ? * *", checkForUpdates)
 	
 	performMigrations()
-
-	if (searchApiUrl ==~ /.*azure.*/) { srchSource = "Azure" } // -- CSteele
 }
 
 def uninstalled() {
@@ -337,12 +336,20 @@ def prefInstallRepositorySearch() {
 	state.remove("back")
 	logDebug "prefInstallRepositorySearch"
 	installMode = "search"
+	searchApiUrl = searchFuzzyApiUrl    // -- CSteele
+	srchSrcTxt = "Fuzzy"     // -- CSteele
+	if (srchMethod) { 
+		srchSrcTxt = "Fast" 
+		searchApiUrl = searchFastApiUrl
+	} // -- CSteele
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader()
 		section {
-			paragraph "<b>Search</b> by $srchSource"	// -- CSteele
+			paragraph "<b>Search</b> by $srchSrcTxt"	// -- CSteele
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
+			paragraph "<b>Search Method - Fast or Fuzzy Search</b>"	// -- CSteele
+			input "srchMethod", "bool", title: "Fast Search", defaultValue: true, submitOnChange: true	// -- CSteele
 		}
 		section {
 			paragraph "<hr>"
@@ -382,7 +389,7 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
-				if (srchSource ==~ /SQL /) {
+				if (srchMethod) {
 					def pkg_tags = packageItem.tags[1..-2].tokenize(',')	// -- CSteele
 					packageItem.tags = pkg_tags 		// -- CSteele
 				}
@@ -395,7 +402,7 @@ def prefInstallRepositorySearchResults() {
 			displayHeader()
 			
 			section {
-				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSource"
+				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSrcTxt Search"	// -- CSteele
 				addCss()
 			}    
 			section {
