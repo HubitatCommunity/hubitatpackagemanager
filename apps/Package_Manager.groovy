@@ -95,7 +95,7 @@ import java.util.regex.Matcher
 @Field static List packagesMatchingInstalledEntries = []
 
 @Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN"]
-@Field static String srchSrcTxt = "Fuzzy"  // -- CSteele
+@Field static String srchSrcTxt = ""  // -- CSteele
 @Field static String searchApiUrl = ""	// -- CSteele
 
 def installed() {
@@ -336,11 +336,11 @@ def prefInstallRepositorySearch() {
 	state.remove("back")
 	logDebug "prefInstallRepositorySearch"
 	installMode = "search"
-	searchApiUrl = searchFuzzyApiUrl    // -- CSteele
-	srchSrcTxt = "Fuzzy"     // -- CSteele
+	searchApiUrl = searchFastApiUrl    // -- CSteele
+	srchSrcTxt = "Fast"     // -- CSteele
 	if (srchMethod) { 
-		srchSrcTxt = "Fast" 
-		searchApiUrl = searchFastApiUrl
+		srchSrcTxt = "Fuzzy" 
+		searchApiUrl = searchFuzzyApiUrl
 	} // -- CSteele
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
