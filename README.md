@@ -1,3 +1,5 @@
+See also: https://hubitatpackagemanager.hubitatcommunity.com/ for the latest documentation.
+
 # hubitat-packagemanager
 The Hubitat Package Manager provides tools to install, uninstall, and upgrade 3rd party packages to add to your Hubitat Elevation environment. This document includes information for how to use this app as well as how to contribute your own packages.
 
