@@ -1,34 +1,24 @@
 /**
  *
- *  Hubitat Package Manager v1.8.2
+ *  Hubitat Package Manager v1.8.3
  *
  *  Copyright 2020 Dominick Meglio
  *
  *    If you find this useful, donations are always appreciated 
  *    https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url
  *
- *
- *
- *    csteele v1.8.2.A   Converted to using HubitatCommunity.com as the search resource. [Lines 66-67 & 379-380]
- *                         added footer to display version and copyright fields.
- *                         added feature to identify Azure search vs sql search.
  */
  
-	public static String version()      {  return "v1.8.2.A"  }
-	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
-
-
 definition(
 	name: "Hubitat Package Manager",
 	namespace: "dcm.hpm",
 	author: "Dominick Meglio",
 	description: "Provides a utility to maintain the apps and drivers on your Hubitat making both installation and updates easier",
 	category: "My Apps",
-	importUrl: "https://raw.githubusercontent.com/dcmeglio/hubitat-packagemanager/master/apps/Package_Manager.groovy",
 	iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
 	iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
 	iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-	documentationLink: "https://github.com/dcmeglio/hubitat-packagemanager/blob/master/README.md",
+	documentationLink: "https://hubitatpackagemanager.hubitatcommunity.com/",
 	singleInstance: true)
 
 preferences {
@@ -64,10 +54,9 @@ preferences {
 import groovy.transform.Field
 import java.util.regex.Matcher
 
-@Field static String repositoryListing = "https://raw.githubusercontent.com/dcmeglio/hubitat-packagerepositories/master/repositories.json"
-@Field static String settingsFile = "https://raw.githubusercontent.com/dcmeglio/hubitat-packagerepositories/master/settings.json"
-@Field static String searchFuzzyApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"  // -- CSteele
-@Field static String searchFastApiUrl = "http://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"  // -- CSteele
+@Field static String repositoryListing = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/repositories.json"
+@Field static String settingsFile      = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/settings.json"
+@Field static String searchApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
 @Field static List categories = [] 
 @Field static List allPackages = []
 @Field static def completedActions = [:]
@@ -75,7 +64,6 @@ import java.util.regex.Matcher
 
 @Field static def downloadQueue = [:]
 @Field static Integer maxDownloadQueueSize = 10
-
 
 @Field static String installAction = ""
 @Field static String installMode = ""
@@ -95,8 +83,6 @@ import java.util.regex.Matcher
 @Field static List packagesMatchingInstalledEntries = []
 
 @Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN"]
-@Field static String srchSrcTxt = ""  // -- CSteele
-@Field static String searchApiUrl = ""	// -- CSteele
 
 def installed() {
 	initialize()
@@ -301,7 +287,6 @@ def prefSettings(params) {
 						input "customRepo", "text", title: "Enter the URL of the repository's directory listing file", required: true
 				}
 			}
-      		display()
 		}
 	}
 }
@@ -326,7 +311,6 @@ def prefPkgInstall() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-      	display()
 	}
 }
 
@@ -336,26 +320,17 @@ def prefInstallRepositorySearch() {
 	state.remove("back")
 	logDebug "prefInstallRepositorySearch"
 	installMode = "search"
-	searchApiUrl = searchFastApiUrl    // -- CSteele
-	srchSrcTxt = "Fast"     // -- CSteele
-	if (srchMethod) { 
-		srchSrcTxt = "Fuzzy" 
-		searchApiUrl = searchFuzzyApiUrl
-	} // -- CSteele
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader()
 		section {
-			paragraph "<b>Search</b> by $srchSrcTxt"	// -- CSteele
+			paragraph "<b>Search</b>"
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
-			paragraph "<b>Search Method - Fast or Fuzzy Search</b>"	// -- CSteele
-			input "srchMethod", "bool", title: "Fast Search", defaultValue: true, submitOnChange: true	// -- CSteele
 		}
 		section {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-      	display()
 	}
 }
 
@@ -389,10 +364,6 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
-				if (srchMethod) {
-					def pkg_tags = packageItem.tags[1..-2].tokenize(',')	// -- CSteele
-					packageItem.tags = pkg_tags 		// -- CSteele
-				}
 				packageItem << [author: repo.author, gitHubUrl: repo.gitHubUrl, payPalUrl: repo.payPalUrl, installed: state.manifests[packageItem.location] != null]
 				searchResults << packageItem
 			}
@@ -402,7 +373,7 @@ def prefInstallRepositorySearchResults() {
 			displayHeader()
 			
 			section {
-				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSrcTxt Search"	// -- CSteele
+				paragraph "<b>Search Results for ${pkgSearch}</b>"
 				addCss()
 			}    
 			section {
@@ -421,7 +392,6 @@ def prefInstallRepositorySearchResults() {
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 				input "btnBack", "button", title: "Back", width: 3
 			}
-      		display()	// -- CSteele
 			
 		}
 
@@ -445,7 +415,6 @@ def prefPkgInstallUrl() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-      	display()	// -- CSteele
 	}
 }
 
@@ -466,7 +435,6 @@ def prefPkgInstallRepository() {
 				paragraph "Refreshing repositories... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-      		display()	// -- CSteele
 		}
 	}
 	else {
@@ -592,7 +560,6 @@ def prefInstallChoices(params) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}    
 }
 
@@ -682,7 +649,6 @@ def prefInstallVerify() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -707,7 +673,6 @@ def prefInstall() {
 				paragraph "Your installation is currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()
 		}
 	}
 	else {
@@ -889,7 +854,6 @@ def prefPkgModify() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -930,7 +894,6 @@ def prefPkgModifyChoices() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {
@@ -943,7 +906,6 @@ def prefPkgModifyChoices() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()	// -- CSteele
 		}
 	}
 }
@@ -1022,7 +984,6 @@ def prefVerifyPackageChanges() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1036,7 +997,6 @@ def prefVerifyPackageChanges() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()
 		}
 	}
 }
@@ -1061,7 +1021,6 @@ def prefMakePackageChanges() {
 				paragraph "Your changes are currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1169,7 +1128,6 @@ def prefPkgRepair() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -1197,7 +1155,6 @@ def prefPkgRepairExecute() {
 				paragraph "Your changes are currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1382,7 +1339,6 @@ def prefPkgUninstall() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -1417,7 +1373,6 @@ def prefPkgUninstallConfirm() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -1441,7 +1396,6 @@ def prefUninstall() {
 				paragraph "Your uninstall is currently in progress... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {
@@ -1689,7 +1643,6 @@ def prefPkgUpdate() {
 					input "btnMainMenu", "button", title: "Main Menu", width: 3
 					
 				}
-				display()	// -- CSteele
 			}
 		}
 		else {
@@ -1748,7 +1701,6 @@ def prefPkgVerifyUpdates() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 def prefPkgUpdatesComplete() {
@@ -1779,7 +1731,6 @@ def prefPkgUpdatesComplete() {
 				paragraph "Installing updates... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {    
@@ -2189,7 +2140,6 @@ def prefPkgMatchUp() {
 				paragraph "<hr>"
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 			}
-			display()	// -- CSteele
 		}
 	}
 }
@@ -2214,7 +2164,6 @@ def prefPkgMatchUpVerify() {
 				paragraph "Matching packages... Please wait..."
 				paragraph getBackgroundStatusMessage()
 			}
-			display()	// -- CSteele
 		}
 	}
 	else {
@@ -2240,7 +2189,6 @@ def prefPkgMatchUpVerify() {
 						paragraph "<hr>"
 						input "btnMainMenu", "button", title: "Main Menu", width: 3
 					}
-					display()	// -- CSteele
 				}
 			}            
 		}
@@ -2472,7 +2420,6 @@ def prefPkgView() {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -2488,7 +2435,6 @@ def buildErrorPage(title, message) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-		display()	// -- CSteele
 	}
 }
 
@@ -3562,6 +3508,8 @@ def installHPMManifest() {
 		createLocationVariable("hpmVersion")
 		sendLocationEvent(name: "hpmVersion", value: "0")
 	}
+	// there should be one HPM Manifest. Remove all and add one back in.
+	state.manifests = state.manifests.findAll { it.value.packageName != "Hubitat Package Manager" }
 	if (state.manifests[state.repositoryListingJSON.hpm.location] == null) {
 		logDebug "Grabbing list of installed apps"
 		if (!login()) {
@@ -3770,7 +3718,6 @@ def displayFooter(){
 		paragraph getFormat("line")
 		paragraph "<div style='color:#1A77C9;text-align:center'>Hubitat Package Manager<br><a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url' target='_blank'><img src='https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg' border='0' alt='PayPal Logo'></a><br><br>Please consider donating. This app took a lot of work to make.<br>If you find it valuable, I'd certainly appreciate it!</div>"
 	}       
-      	display()	// -- CSteele
 }
 
 def hasTag(pkg, tag) {
@@ -3912,18 +3859,3 @@ def getAppList() {
 	}
 	return result
 }
-
-/*
-	display	// -- CSteele
-    
-	Purpose: Displays the title/copyright/version info
-
-	Notes: 	Not very exciting.
-*/
-def display() {
-	section{
-		paragraph "\n<hr style='background-color:#1A77C9; height: 1px; border: 0;'></hr>"
-		paragraph "<div style='color:#1A77C9;text-align:center;font-weight:small;font-size:9px'>Developed by: DCMeglio<br/>Current Version: ${version()} -  ${thisCopyright}</div>"
-	}
-}
-
