@@ -1,24 +1,38 @@
 /**
  *
- *  Hubitat Package Manager v1.8.3
+ *  Hubitat Package Manager v1.8.4
  *
  *  Copyright 2020 Dominick Meglio
  *
  *    If you find this useful, donations are always appreciated 
  *    https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url
  *
+ *
+ *
+ *    csteele v1.8.4     Migrated to HubitatCommunity
+ *                         added txtEnable to silence log.info messages
+ *                         use httpS for Fast Search 
+ *    csteele v1.8.3     No change here. Changes were to Dominic's repo to cause an upgrade to here.
+ *    csteele v1.8.2.A   Converted to using HubitatCommunity.com as the search resource. [Lines 66-67 & 379-380]
+ *                         added footer to display version and copyright fields.
+ *                         added feature to identify Azure search vs sql search.
  */
  
+	public static String version()      {  return "v1.8.4"  }
+	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
+
+
 definition(
 	name: "Hubitat Package Manager",
 	namespace: "dcm.hpm",
 	author: "Dominick Meglio",
 	description: "Provides a utility to maintain the apps and drivers on your Hubitat making both installation and updates easier",
 	category: "My Apps",
-	iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-	iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-	iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
+	importUrl: "https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/apps/Package_Manager.groovy",
 	documentationLink: "https://hubitatpackagemanager.hubitatcommunity.com/",
+	iconUrl: "",
+	iconX2Url: "",
+	iconX3Url: "",
 	singleInstance: true)
 
 preferences {
@@ -56,7 +70,8 @@ import java.util.regex.Matcher
 
 @Field static String repositoryListing = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/repositories.json"
 @Field static String settingsFile      = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/settings.json"
-@Field static String searchApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
+@Field static String searchFuzzyApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"  // -- CSteele
+@Field static String searchFastApiUrl  = "https://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"  // -- CSteele
 @Field static List categories = [] 
 @Field static List allPackages = []
 @Field static def completedActions = [:]
@@ -64,6 +79,7 @@ import java.util.regex.Matcher
 
 @Field static def downloadQueue = [:]
 @Field static Integer maxDownloadQueueSize = 10
+
 
 @Field static String installAction = ""
 @Field static String installMode = ""
@@ -83,6 +99,8 @@ import java.util.regex.Matcher
 @Field static List packagesMatchingInstalledEntries = []
 
 @Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN"]
+@Field static String srchSrcTxt = ""  // -- CSteele
+@Field static String searchApiUrl = ""	// -- CSteele
 
 def installed() {
 	initialize()
@@ -230,6 +248,7 @@ def prefSettings(params) {
 			if (!state.firstRun) {
 				section ("General") {
 					input "debugOutput", "bool", title: "Enable debug logging", defaultValue: true
+					input "txtEnable", "bool", title: "Enable text logging", defaultValue: true
 					input "includeBetas", "bool", title: "When updating, install pre-release versions. Note: Pre-releases often include more bugs and should be considered beta software"
 				}
 				section ("Package Updates") {
@@ -320,12 +339,20 @@ def prefInstallRepositorySearch() {
 	state.remove("back")
 	logDebug "prefInstallRepositorySearch"
 	installMode = "search"
+	searchApiUrl = searchFuzzyApiUrl    // -- CSteele
+	srchSrcTxt = "Fuzzy"     // -- CSteele
+	if (settings?.srchMethod != false) { 
+		srchSrcTxt = "Fast" 
+		searchApiUrl = searchFastApiUrl
+	} // -- CSteele
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader()
 		section {
-			paragraph "<b>Search</b>"
+			paragraph "<b>Search</b> by $srchSrcTxt"	// -- CSteele
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
+			paragraph "<b>Search Method - Fast or Fuzzy Search</b>"	// -- CSteele
+			input "srchMethod", "bool", title: "Fast Search", defaultValue: true, submitOnChange: true	// -- CSteele
 		}
 		section {
 			paragraph "<hr>"
@@ -364,6 +391,10 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
+				if (settings?.srchMethod != false) {
+					def pkg_tags = packageItem.tags[1..-2].tokenize(',')	// -- CSteele
+					packageItem.tags = pkg_tags 		// -- CSteele
+				}
 				packageItem << [author: repo.author, gitHubUrl: repo.gitHubUrl, payPalUrl: repo.payPalUrl, installed: state.manifests[packageItem.location] != null]
 				searchResults << packageItem
 			}
@@ -373,7 +404,7 @@ def prefInstallRepositorySearchResults() {
 			displayHeader()
 			
 			section {
-				paragraph "<b>Search Results for ${pkgSearch}</b>"
+				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSrcTxt Search"	// -- CSteele
 				addCss()
 			}    
 			section {
@@ -618,6 +649,7 @@ def prefInstallVerify() {
 		return prefOptions()
 	logDebug "prefInstallVerify"
 	
+	if(!pkgInstall) return buildErrorPage("no package selected", "whats up?")	// pr #114
 	atomicState.backgroundActionInProgress = null
 	statusMessage = ""        
 	errorOccurred = null
@@ -2269,7 +2301,7 @@ def performMatchupManifestsComplete(results, data) {
 		def result = results[uri]
 		def manifestContents = result.result
 		if (manifestContents == null)
-			log.error "Found a bad manifest ${uri}. Please notify the package developer."
+			log.error "Found an incomplete manifest ${uri}. Please notify the package developer."
 		else {
 			def pkgDetails = [
 				gitHubUrl: data.manifestData[uri].gitHubUrl,
@@ -3403,7 +3435,7 @@ def uninstallFile(id, fileName) {
 def setBackgroundStatusMessage(msg) {
 	if (statusMessage == null)
 		statusMessage = ""
-	log.info msg
+	if (settings?.txtEnable != false) log.info msg
 	statusMessage += "${msg}<br>"
 }
 
@@ -3559,7 +3591,7 @@ def updateRepositoryListing() {
 	else {
 		for (newRepo in state.repositoryListingJSON.repositories) {
 			if (oldListOfRepositories.size() > 0 && !oldListOfRepositories.find { it -> it.location == newRepo.location} && !installedRepositories.contains(newRepo.location)) {
-				log.info "A new repository was added, ${newRepo.location}"
+				if (settings?.txtEnable != false) log.info "A new repository was added, ${newRepo.location}"
 				installedRepositories << newRepo.location
 				addedRepositories << newRepo.location
 			}
@@ -3709,6 +3741,7 @@ def getFormat(type, myText=""){            // Modified from @Stephack Code
 
 def displayHeader() {
 	section (getFormat("title", "Hubitat Package Manager")) {
+		paragraph "<div style='color:#1A77C9;text-align:right;font-weight:small;font-size:9px;'>Developed by: DCMeglio<br/>Current Version: ${version()} -  ${thisCopyright}</div>"
 		paragraph getFormat("line")
 	}
 }
@@ -3716,7 +3749,7 @@ def displayHeader() {
 def displayFooter(){
 	section() {
 		paragraph getFormat("line")
-		paragraph "<div style='color:#1A77C9;text-align:center'>Hubitat Package Manager<br><a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url' target='_blank'><img src='https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg' border='0' alt='PayPal Logo'></a><br><br>Please consider donating. This app took a lot of work to make.<br>If you find it valuable, I'd certainly appreciate it!</div>"
+		paragraph "<div style='color:#1A77C9;text-align:center;font-weight:small;font-size:11px;'>Hubitat Package Manager<br><a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url' target='_blank'><img src='https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg' border='0' alt='PayPal Logo'></a><br><br>Please consider donating. This app took a lot of work to make.<br>If you find it valuable, I'd certainly appreciate it!</div>"
 	}       
 }
 
