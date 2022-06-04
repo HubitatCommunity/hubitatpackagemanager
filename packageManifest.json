@@ -6,7 +6,7 @@
 	"dateReleased": "2022-05-26",
 	"releaseNotes": "Added Fast Search\n -- added txtEnable to silence log.info messages\n -- use httpS for Fast Search",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
-	"communityLink": "https://community.hubitat.com/t/beta-hubitat-package-manager/38016",
+	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
 		{
 			"id" : "2e6b1674-a87b-41a8-bd65-5cbbf78d842e",
