@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.8.4",
-	"dateReleased": "2022-05-26",
-	"releaseNotes": "Added Fast Search\n -- added txtEnable to silence log.info messages\n -- use httpS for Fast Search",
+	"version": "1.8.5",
+	"dateReleased": "2022-06-05",
+	"releaseNotes": "v1.8.5     Bundles support added.",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
