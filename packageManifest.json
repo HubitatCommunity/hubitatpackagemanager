@@ -12,7 +12,6 @@
 			"id" : "2e6b1674-a87b-41a8-bd65-5cbbf78d842e",
 			"name": "Hubitat Package Manager",
 			"location": "https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/apps/Package_Manager.groovy",
-			"betaLocation": "https://raw.githubusercontent.com/csteele-PD/Hubitat-public/master/bundles/Package_Manager.groovy",
 			"required": true
 		}
 	]
