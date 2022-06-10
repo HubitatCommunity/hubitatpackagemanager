@@ -43,6 +43,16 @@
 			"required": true
 		}
 	],
+	"bundles" : [
+		{
+			"id" : "81ccbc34-ba77-4a4c-919a-75e872a7b6b3",
+			"name": "Sample Bundle",
+			"namespace": "dcm",
+			"location": "https://raw.githubusercontent.com/dcmeglio/.../bundle.groovy",
+			"betaLocation": "https://raw.githubusercontent.com/dcmeglio/.../betabundle.groovy",
+			"required": true
+		}
+	],	
 	"files" : [
 		{
 			"id":"3f7ffb28-f248-40c3-8489-113f9eebc4a1",
