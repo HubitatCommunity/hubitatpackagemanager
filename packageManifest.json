@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.8.5",
-	"dateReleased": "2022-06-05",
-	"releaseNotes": "v1.8.5     Bundles support added.",
+	"version": "1.8.6",
+	"dateReleased": "2022-06-10",
+	"releaseNotes": "v1.8.6     Un-Match added.\n             moved Bundles before Apps/Drivers for Install and Repair.\n             included Bundles into modify.\n",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
