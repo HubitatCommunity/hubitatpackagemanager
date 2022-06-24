@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.8.6
+ *  Hubitat Package Manager v1.8.7
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,7 @@
  *
  *
  *
+ *    csteele v1.8.7     fix to Update bundle. (birdslikewires)
  *    csteele v1.8.6     Un-Match added.
  *                         moved Bundles before Apps/Drivers for Install and Repair.
  *                         included Bundles into modify.
@@ -22,7 +23,7 @@
  *                         added feature to identify Azure search vs sql search.
  */
  
-	public static String version()      {  return "v1.8.6"  }
+	public static String version()      {  return "v1.8.7"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 
@@ -358,8 +359,8 @@ def prefInstallRepositorySearch() {
 	state.remove("back")
 	logDebug "prefInstallRepositorySearch"
 	installMode = "search"
-	searchApiUrl = searchFuzzyApiUrl  
-	srchSrcTxt = "Fuzzy"   
+	searchApiUrl = searchFuzzyApiUrl
+	srchSrcTxt = "Fuzzy"
 	if (settings?.srchMethod != false) { 
 		srchSrcTxt = "Fast" 
 		searchApiUrl = searchFastApiUrl
@@ -2098,7 +2099,6 @@ def performUpdates(runInBackground) {
 			
 			for (bundleToInstall in manifest.bundles) {
 				def location = getItemDownloadLocation(bundleToInstall)
-				def bundleContents = bundleFiles[location]
 				setBackgroundStatusMessage("Installing ${location}")
 				if (!installBundle(location)) {
 					return rollback("Failed to install bundle ${location}. Please notify the package developer.", false)
