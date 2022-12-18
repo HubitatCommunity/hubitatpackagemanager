@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.8.7
+ *  Hubitat Package Manager v1.8.8
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,9 @@
  *
  *
  *
+ *    csteele v1.8.8     check for Null for Invalid Category & Tags
+ *                         log.error changed to log.warn where the event was handled.
+ *                         detect/delete missing Repositories.
  *    csteele v1.8.7     fix to Update bundle. (birdslikewires)
  *    csteele v1.8.6     Un-Match added.
  *                         moved Bundles before Apps/Drivers for Install and Repair.
@@ -23,7 +26,7 @@
  *                         added feature to identify Azure search vs sql search.
  */
  
-	public static String version()      {  return "v1.8.7"  }
+	public static String version()      {  return "v1.8.8"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 
@@ -131,7 +134,7 @@ def initialize() {
 }
 
 def uninstalled() {
-	logDebug "uninstalling app"
+	log.warn "uninstalling app"
 	unschedule()
 }
 
@@ -500,14 +503,14 @@ def renderTags(pkgList) {
 				tags << pkg.category
 		}
 		else
-			log.warn "Invalid category found ${pkg.category} for ${pkg.location}"
+			if (pkg.category?.trim()) { log.warn "Invalid category found: ${pkg.category} for ${pkg.location}" }
 		for (tag in pkg.tags) {
 			if (state.categoriesAndTags.tags.contains(tag)) {
 				if (!tags.contains(tag))
 					tags << tag
 			}
 			else
-				log.warn "Invalid tag found ${tag} for ${pkg.location}"
+				if (tag?.trim()) { log.warn "Invalid tag found: ${tag} for ${pkg.location}" }
 		}
 	}
 	tags = tags.sort()
@@ -633,8 +636,7 @@ def performRepositoryRefreshComplete(results, data)
 		def result = results[uri]
 		def fileContents = result.result
 		if (fileContents == null) {
-			log.warn "Error refreshing ${repoName}"
-			setBackgroundStatusMessage("Failed to refresh ${repoName}")
+			setBackgroundStatusMessage("Unable to Refresh ${repoName}", "warn")
 			continue
 		}
 
@@ -762,7 +764,7 @@ def performInstallation() {
 	if (fileMgrResults.success)
 		fileManagerFiles = fileMgrResults.files
 	else 
-		return triggerError("Error downloading file", "An error occurred downloading ${fileMgrResults.name}", false)
+		return triggerError("Failed download of file", "An error occurred downloading ${fileMgrResults.name}", false)
 	
 	def requiredApps = getRequiredAppsFromManifest(manifest)
 	def requiredDrivers = getRequiredDriversFromManifest(manifest)
@@ -774,7 +776,7 @@ def performInstallation() {
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
 			state.manifests.remove(pkgInstall)
-			return triggerError("Error downloading file", "An error occurred downloading ${location}", false)
+			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
 		}
 		appFiles[location] = fileContents
 	}
@@ -786,7 +788,7 @@ def performInstallation() {
 			def fileContents = downloadFile(location)
 			if (fileContents == null) {
 				state.manifests.remove(pkgInstall)
-				return triggerError("Error downloading file", "An error occurred downloading ${location}", false)
+				return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
 			}
 			appFiles[location] = fileContents
 		}
@@ -797,7 +799,7 @@ def performInstallation() {
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
 			state.manifests.remove(pkgInstall)
-			return triggerError("Error downloading file", "An error occurred downloading ${location}", false)
+			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
 		}
 		driverFiles[location] = fileContents
 	}
@@ -810,7 +812,7 @@ def performInstallation() {
 			def fileContents = downloadFile(location)
 			if (fileContents == null) {
 				state.manifests.remove(pkgInstall)
-				return triggerError("Error downloading file", "An error occurred downloading ${location}", false)
+				return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
 			}
 			driverFiles[location] = fileContents
 		}
@@ -1140,7 +1142,7 @@ def performModify() {
 		setBackgroundStatusMessage("Downloading ${app.name}")
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
-			return triggerError("Error downloading file", "An error occurred downloading ${location}", false)
+			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
 		} 
 		appFiles[location] = fileContents
 	}
@@ -1150,7 +1152,7 @@ def performModify() {
 		setBackgroundStatusMessage("Downloading ${driver.name}")
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
-			return triggerError("Error downloading file", "An error occurred downloading ${location}", false)
+			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
 		}
 		driverFiles[location] = fileContents
 	}
@@ -1306,7 +1308,7 @@ def performRepair() {
 		if (fileMgrResults.success)
 			fileManagerFiles = fileMgrResults.files
 		else
-			return triggerError("Error downloading file", "An error occurred downloading ${fileMgrResults.name}", false)
+			return triggerError("Failed download of file", "An error occurred downloading ${fileMgrResults.name}", false)
 		for (app in manifest.apps) {
 			def appHeID = getAppById(installedManifest,app.id)?.heID
 			if (isAppInstalled(installedManifest,app.id) && installedApps.find { it -> it.id == appHeID }) {
@@ -1314,7 +1316,7 @@ def performRepair() {
 				def location = getItemDownloadLocation(app)
 				def fileContents = downloadFile(location)
 				if (fileContents == null) {
-					return triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+					return triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 				}
 				appFiles[location] = fileContents    
 			}
@@ -1323,7 +1325,7 @@ def performRepair() {
 				def location = getItemDownloadLocation(app)
 				def fileContents = downloadFile(location)
 				if (fileContents == null) {
-					return triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+					return triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 				}
 				appFiles[location] = fileContents
 			}
@@ -1335,7 +1337,7 @@ def performRepair() {
 				setBackgroundStatusMessage("Downloading ${driver.name}")
 				def fileContents = downloadFile(location)
 				if (fileContents == null) {
-					return triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+					return triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 				}
 				driverFiles[location] = fileContents
 			}
@@ -1344,14 +1346,14 @@ def performRepair() {
 				def location = getItemDownloadLocation(driver)
 				def fileContents = downloadFile(location)
 				if (fileContents == null) {
-					return triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+					return triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 				}
 				driverFiles[location] = fileContents
 			}
 		}
 	}
 	else {
-		return triggerError("Error downloading file", "The manifest file ${pkg} no longer seems to be valid.", runInBackground)
+		return triggerError("Failed download of file", "The manifest file ${pkg} no longer seems to be valid.", runInBackground)
 	}
 	
 	if (manifest) {
@@ -1681,7 +1683,7 @@ def performUpdateCheck() {
 						}
 					}
 					catch (any) { 
-						log.error "Bad manifest for ${state.manifests[pkg.key].packageName}. Please notify the package developer."
+						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. Please notify the package developer."
 					}
 				}
 				for (driver in manifest.drivers) {
@@ -1713,13 +1715,13 @@ def performUpdateCheck() {
 						}
 					}
 					catch (e) {
-						log.error "Bad manifest for ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
+						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
 					}
 				}
 			}    
 		}
 		catch (e) {
-			log.error "Bad manifest for ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
+			logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
 		}
 	}
 	packagesWithUpdates = packagesWithUpdates.sort { it -> it.value }
@@ -1958,7 +1960,7 @@ def performUpdates(runInBackground) {
 			if (fileMgrResults.success)
 				fileManagerFiles = fileManagerFiles + fileMgrResults.files
 			else
-				return triggerError("Error downloading file", "An error occurred downloading ${fileMgrResults.name}", false)
+				return triggerError("Failed download of file", "An error occurred downloading ${fileMgrResults.name}", false)
 			for (app in manifest.apps) {
 				if (isAppInstalled(installedManifest,app.id)) {
 					if (shouldUpgrade(pkg, app.id)) {
@@ -1972,7 +1974,7 @@ def performUpdates(runInBackground) {
 						if (fileContents == null) {
 							resultData.success = false
 							resultData.failed << pkg
-							resultData.message = triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+							resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 							return resultData
 						}
 						appFiles[location] = fileContents    
@@ -1989,7 +1991,7 @@ def performUpdates(runInBackground) {
 					if (fileContents == null) {
 						resultData.success = false
 						resultData.failed << pkg
-						resultData.message = triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+						resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 						return resultData
 					}
 					appFiles[location] = fileContents
@@ -2009,7 +2011,7 @@ def performUpdates(runInBackground) {
 								if (fileContents == null) {
 									resultData.success = false
 									resultData.failed << pkg
-									resultData.message = triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+									resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 									return resultData
 								}
 								appFiles[location] = fileContents
@@ -2031,7 +2033,7 @@ def performUpdates(runInBackground) {
 						if (fileContents == null) {
 							resultData.success = false
 							resultData.failed << pkg
-							resultData.message = triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+							resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 							return resultData
 						}
 						driverFiles[location] = fileContents
@@ -2048,7 +2050,7 @@ def performUpdates(runInBackground) {
 					if (fileContents == null) {
 						resultData.success = false
 						resultData.failed << pkg
-						resultData.message = triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+						resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 						return resultData
 					}
 					driverFiles[location] = fileContents
@@ -2067,7 +2069,7 @@ def performUpdates(runInBackground) {
 							if (fileContents == null) {
 								resultData.success = false
 								resultData.failed << pkg
-								resultData.message = triggerError("Error downloading file", "An error occurred downloading ${location}", runInBackground)
+								resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 								return resultData
 							}
 							driverFiles[location] = fileContents
@@ -2081,7 +2083,7 @@ def performUpdates(runInBackground) {
 		else {
 			resultData.success = false
 			resultData.failed << pkg
-			resultData.message = triggerError("Error downloading file", "The manifest file ${pkg} no longer seems to be valid.", runInBackground)
+			resultData.message = triggerError("Failed download of file", "The manifest file ${pkg} no longer seems to be valid.", runInBackground)
 			return resultData
 		}
 	}
@@ -2378,14 +2380,13 @@ def performMatchupRepoRefreshComplete(results, data) {
 		def result = results[uri]
 		def fileContents = result.result
 		if (fileContents == null) {
-			log.warn "Error refreshing ${repoName ?: uri}"
-			setBackgroundStatusMessage("Failed to refresh ${repoName ?: uri}")
+			setBackgroundStatusMessage("Unable to Refresh ${repoName ?: uri}", "warn")
 			continue
 		}
 
 		for (pkg in fileContents.packages) {
 			if (packageManifests.contains(pkg.location)) {
-				log.warn "Duplicate manifest found ${pkg.location}, skipping"
+				logInfo "Skipping duplicate manifest ${pkg.location} Please notify the package developer."
 				continue
 			}
 			packageManifests << pkg.location
@@ -2428,7 +2429,7 @@ def performMatchupManifestsComplete(results, data) {
 		def result = results[uri]
 		def manifestContents = result.result
 		if (manifestContents == null)
-			log.error "Found an incomplete manifest ${uri}. Please notify the package developer."
+			logInfo "Ignoring an incomplete manifest ${uri}. Please notify the package developer."
 		else {
 			def pkgDetails = [
 				gitHubUrl: data.manifestData[uri].gitHubUrl,
@@ -2735,7 +2736,7 @@ def checkForUpdates() {
 						}
 					}
 					else {
-						log.error "Automatic update failure: ${result}"
+						log.warn "Automatic update failure: ${result}"
 						if (notifyOnFailure) {
 							if (notifySpecificPackages)
 								notifyUpdateFailureDevices*.deviceNotification(buildNotification("One or more packages failed to automatically update. Check the logs for more information"))
@@ -2744,7 +2745,7 @@ def checkForUpdates() {
 					}
 				}
 				catch (e) {
-					log.error "Automatic update failure: ${e}"
+					log.warn "Automatic update failure: ${e}"
 					if (notifyOnFailure) {
 						if (notifySpecificPackages)
 							notifyUpdateFailureDevices*.deviceNotification(buildNotification("One or more packages failed to automatically update. Check the logs for more information"))
@@ -2961,7 +2962,7 @@ def downloadFile(file) {
 		return result
 	}
 	catch (e) {
-		log.error "Error downloading ${file}: ${e}"
+		logInfo "Skip download of ${file}: ${e} Please notify the package developer."
 		return null
 	}
 }
@@ -2978,7 +2979,7 @@ def downloadFileAsync(String file, String callback, Map data = null) {
 		asynchttpGet(downloadFileAsyncCallback, params, [callback: callback, data: data, file: file])
 	}
 	catch (e) {
-		log.error "Error downloading ${file}: ${e}"
+		logInfo "Skip download of ${file}: ${e} Please notify the package developer."
 		return null
 	}
 }
@@ -2990,10 +2991,10 @@ def downloadFileAsyncCallback(resp, data) {
 		if (resp.status >= 200 && resp.status <= 299)
 			result = resp.data
 		else
-			log.error "Error downloading ${data['file']}: Received response ${resp.status}"
+			logInfo "Skip download of ${data['file']}: Received response ${resp.status} Please notify the package developer."
 	}
 	catch (e) {
-		log.error "Error downloading ${data['file']}: ${e}"
+		logInfo "Skip download of ${data['file']}: ${e} Please notify the package developer."
 	}
 	this."${data['callback']}"(result, data['data'])
 }
@@ -3013,8 +3014,8 @@ def getMultipleJSONFilesCallback(resp, data) {
 	def result = null
 	"${data.statusCallback}"(data.uri, data.uri)
 	synchronized (downloadQueue) {
-		downloadQueue[data.batchid].results[data.uri].result = resp
-		downloadQueue[data.batchid].results[data.uri].complete = true
+		downloadQueue[data.batchid]?.results[data.uri]?.result = resp
+		downloadQueue[data.batchid]?.results[data.uri]?.complete = true
 		
 		def queuedItem = downloadQueue[data.batchid].results.find { k, v -> v.queued == true}
 		if (queuedItem != null) {
@@ -3769,10 +3770,11 @@ def uninstallBundle(bundleName) {
 	return false 
 }
 
-def setBackgroundStatusMessage(msg) {
+def setBackgroundStatusMessage(msg, level="info") {
 	if (statusMessage == null)
 		statusMessage = ""
-	if (settings?.txtEnable != false) log.info msg
+	if (level == "warn") log.warn msg
+	if (settings?.txtEnable != false && level == "info") log.info msg 
 	statusMessage += "${msg}<br>"
 }
 
@@ -3901,7 +3903,6 @@ def installHPMManifest() {
 		}
 		def appId = appsInstalled.find { i -> i.title == "Hubitat Package Manager" && i.namespace == "dcm.hpm"}?.id
 		if (appId != null) {
-//	state.manifests = state.manifests.findAll { it.value.packageName != "Hubitat Package Manager" }
 			manifest.apps[0].heID = appId
 			state.manifests[state.repositoryListingJSON.hpm.location] = manifest
 			minimizeStoredManifests()
@@ -3919,9 +3920,9 @@ def installHPMManifest() {
 
 def updateRepositoryListing() {
 	def addedRepositories = []
-	logDebug "Refreshing repository list"
+	logInfo "Refreshing repository list"
 	def oldListOfRepositories = state.repositoryListingJSON.repositories
-	state.repositoryListingJSON = getJSONFile(repositoryListing)
+	state.repositoryListingJSON = getJSONFile(repositoryListing)		// get the Master Manifest file
 	if (state.customRepositories) {
 		state.customRepositories.each { r -> 
 			state.repositoryListingJSON.repositories << [name: r.value, location: r.key]
@@ -3935,13 +3936,21 @@ def updateRepositoryListing() {
 	else {
 		for (newRepo in state.repositoryListingJSON.repositories) {
 			if (oldListOfRepositories.size() > 0 && !oldListOfRepositories.find { it -> it.location == newRepo.location} && !installedRepositories.contains(newRepo.location)) {
-				if (settings?.txtEnable != false) log.info "A new repository was added, ${newRepo.location}"
+				logInfo "A new repository was added, ${newRepo.location}"
 				installedRepositories << newRepo.location
 				addedRepositories << newRepo.location
-			}
+			} 
 		}
+		oldListOfRepositories.removeAll(state.repositoryListingJSON.repositories)  // what's missing?
+		if (oldListOfRepositories) {
+			logDebug "missingRepositories: $oldListOfRepositories"
+		  installedRepositories.removeAll(oldListOfRepositories.location)
+		  logInfo "A repository was removed, ${oldListOfRepositories.location}"
+		}
+ 
 		app.updateSetting("installedRepositories", installedRepositories)
 	}
+	
 	return addedRepositories
 }
 
@@ -4054,6 +4063,12 @@ def deleteCustomRepository(customRepositoryIdx) {
 def logDebug(msg) {
 	if (settings?.debugOutput != false) {
 		log.debug msg
+	}
+}
+
+def logInfo(msg) {
+	if (settings?.txtEnable != false) {
+		log.info msg 
 	}
 }
 
@@ -4180,8 +4195,7 @@ def performMigrations() {
 			def repoName = getRepoName(repo)
 			def fileContents = getJSONFile(repo)
 			if (!fileContents) {
-				log.warn "Error refreshing ${repoName}"
-				setBackgroundStatusMessage("Failed to refresh ${repoName}")
+				setBackgroundStatusMessage("Unable to Refresh ${repoName}", "warn")
 				continue
 			}
 			for (pkg in fileContents.packages) {
