@@ -1,32 +1,33 @@
-/**
- *
- *  Hubitat Package Manager v1.8.8
- *
+/***
+ *  Hubitat Package Manager v1.8.9
+
  *  Copyright 2020 Dominick Meglio
- *
- *    If you find this useful, donations are always appreciated 
+
+ *    If you find this useful, donations are always appreciated
  *    https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url
- *
- *
- *
+
+
+
+ *    csteele v1.8.9     allow required: true as string also
+ *                         fix for a ProBundle install
  *    csteele v1.8.8     check for Null for Invalid Category & Tags
- *                         log.error changed to log.warn where the event was handled.
- *                         detect/delete missing Repositories.
+ *                         log.error changed to log.warn where the event was handled
+ *                         detect/delete missing Repositories
  *    csteele v1.8.7     fix to Update bundle. (birdslikewires)
- *    csteele v1.8.6     Un-Match added.
- *                         moved Bundles before Apps/Drivers for Install and Repair.
- *                         included Bundles into modify.
- *    csteele v1.8.5     Bundles support added.
+ *    csteele v1.8.6     Un-Match added
+ *                         moved Bundles before Apps/Drivers for Install and Repair
+ *                         included Bundles into modify
+ *    csteele v1.8.5     Bundles support added
  *    csteele v1.8.4     Migrated to HubitatCommunity
  *                         added txtEnable to silence log.info messages
- *                         use httpS for Fast Search 
- *    csteele v1.8.3     No change here. Changes were to Dominic's repo to cause an upgrade to here.
+ *                         use httpS for Fast Search
+ *    csteele v1.8.3     No change here. Changes were to Dominic's repo to cause an upgrade to here
  *    csteele v1.8.2.A   Converted to using HubitatCommunity.com as the search resource. [Lines 66-67 & 379-380]
- *                         added footer to display version and copyright fields.
- *                         added feature to identify Azure search vs sql search.
+ *                         added footer to display version and copyright fields
+ *                         added feature to identify Azure search vs sql search
  */
- 
-	public static String version()      {  return "v1.8.8"  }
+
+	public static String version()      {  return "v1.8.9"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 
@@ -83,7 +84,7 @@ import java.util.regex.Matcher
 @Field static String settingsFile      = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/settings.json"
 @Field static String searchFuzzyApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
 @Field static String searchFastApiUrl  = "https://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"
-@Field static List categories = [] 
+@Field static List categories = []
 @Field static List allPackages = []
 @Field static def completedActions = [:]
 @Field static def manifestForRollback = null
@@ -129,7 +130,7 @@ def initialize() {
 	else
 		timeOfDayForUpdateChecks = timeToday(updateCheckTime, location.timeZone)
 	schedule("00 ${timeOfDayForUpdateChecks.minutes} ${timeOfDayForUpdateChecks.hours} ? * *", checkForUpdates)
-	
+
 	performMigrations()
 }
 
@@ -159,13 +160,13 @@ def appButtonHandler(btn) {
 
 def prefOptions() {
 	state.remove("mainMenu")
-	
+
 	if (state.customRepo && customRepo != "" && customRepo != null) {
 		def repoListing = getJSONFile(customRepo)
 		if (repoListing == null) {
 			clearStateSettings(true)
 			return buildErrorPage("Error loading repository", "The repository file you specified could not be loaded.")
-		} 
+		}
 		else {
 			installedRepositories << customRepo
 			if (state.customRepositories == null)
@@ -238,7 +239,7 @@ def prefSettings(params) {
 	}
 
 	installHPMManifest()
-	if (app.getInstallationState() == "COMPLETE" && params?.force != true && !showSettingsForSecurityEnablement) 
+	if (app.getInstallationState() == "COMPLETE" && params?.force != true && !showSettingsForSecurityEnablement)
 		return prefOptions()
 	else {
 		def showInstall = app.getInstallationState() == "INCOMPLETE"
@@ -246,7 +247,7 @@ def prefSettings(params) {
 			state.firstRun = true
 		return dynamicPage(name: "prefSettings", title: "", nextPage: "prefOptions", install: showInstall, uninstall: false) {
 			displayHeader()
-			
+
 			section ("<b>Hub Security</b>") {
 				if (showSettingsForSecurityEnablement) {
 					paragraph "<b>Hub Security appears to be enabled on your hub but is not enabled within HPM. Please configure hub security below</b>"
@@ -269,12 +270,12 @@ def prefSettings(params) {
 				}
 				section {
 					paragraph "<p><hr></p><b>Package Updates</b>"
-					input "updateCheckTime", "time", title: "Specify what time update checking should be performed", defaultValue: "00:00", required: true        
+					input "updateCheckTime", "time", title: "Specify what time update checking should be performed", defaultValue: "00:00", required: true
 
 					input "notifyUpdatesAvailable", "bool", title: "Notify me when updates are available", submitOnChange: true
 					if (notifyUpdatesAvailable)
 						input "notifyDevices", "capability.notification", title: "Devices to notify", required: true, multiple: true
-					
+
 					input "autoUpdateMode", "enum", title: "Install updates automatically when", options: ["Always":"Always", "Never":"Never", "Include":"Only those I list", "Exclude":"All packages except the ones I list"], submitOnChange: true
 					if (autoUpdateMode != "Never") {
 						if (autoUpdateMode == "Include") {
@@ -285,7 +286,7 @@ def prefSettings(params) {
 							def listOfPackages = getInstalledPackages(false)
 							input "appsNotToAutoUpdate", "enum", title: "Which packages should NOT be automatically updated?", required: true, multiple: true, options:listOfPackages
 						}
-						
+
 						input "notifyOnSuccess", "bool", title: "Notify me if automatic updates are successful", submitOnChange: true
 						if (notifyOnSuccess)
 							input "notifyUpdateSuccessDevices", "capability.notification", title: "Devices to notify", required: true, multiple: true
@@ -293,8 +294,8 @@ def prefSettings(params) {
 						if (notifyOnFailure)
 							input "notifyUpdateFailureDevices", "capability.notification", title: "Devices to notify", required: true, multiple: true
 					}
-					
-					if (notifyUpdatesAvailable || notifyOnSuccess || notifyOnFailure) 
+
+					if (notifyUpdatesAvailable || notifyOnSuccess || notifyOnFailure)
 						input "notifyIncludeHubName", "bool", title: "Include hub name in notifications", defaultValue: false
 					if (notifyOnSuccess || notifyOnFailure)
 						input "notifySpecificPackages", "bool", title: "Send notifications for each specific package", defaultValue: false
@@ -338,7 +339,7 @@ def prefPkgInstall() {
 	if (state.mainMenu)
 		return prefOptions()
 	logDebug "prefPkgInstall"
-	
+
 	return dynamicPage(name: "prefPkgInstall", title: "", install: true, uninstall: false) {
 		displayHeader()
 		section {
@@ -347,7 +348,7 @@ def prefPkgInstall() {
 			href(name: "prefInstallRepositorySearch", title: "Search by Keywords", required: false, page: "prefInstallRepositorySearch", description: "Search for packages by searching for keywords. <b>This will only include the standard repositories, <i>not</i> custom repositories.</b>")
 			href(name: "prefPkgInstallRepository", title: "Browse by Tags", required: false, page: "prefPkgInstallRepository", description: "Choose a package from a repository browsing by tags. <b>This will include both the standard repositories and any custom repositories you have setup.</b>")
 			href(name: "prefPkgInstallUrl", title: "From a URL", required: false, page: "prefPkgInstallUrl", description: "Install a package using a URL to a specific package. This is an advanced feature, only use it if you know how to find a package's manifest manually.")
-			
+
 		}
 		section {
 			paragraph "<hr>"
@@ -364,8 +365,8 @@ def prefInstallRepositorySearch() {
 	installMode = "search"
 	searchApiUrl = searchFuzzyApiUrl
 	srchSrcTxt = "Fuzzy"
-	if (settings?.srchMethod != false) { 
-		srchSrcTxt = "Fast" 
+	if (settings?.srchMethod != false) {
+		srchSrcTxt = "Fast"
 		searchApiUrl = searchFastApiUrl
 	}
 
@@ -389,7 +390,7 @@ def prefInstallRepositorySearchResults() {
 		return prefInstallRepositorySearch()
 	logDebug "prefInstallRepositorySearchResults"
 	installMode = "search"
-	
+
 	def params = [
 		uri: searchApiUrl,
 		contentType: "application/json",
@@ -402,9 +403,9 @@ def prefInstallRepositorySearchResults() {
 			"query": 'query Search($searchQuery: String) { repositories { author, gitHubUrl, payPalUrl, packages (search: $searchQuery) {name, description, location, tags}}}'
 		]
 	]
-	
+
 	def result = null
-	httpPost(params) { resp -> 
+	httpPost(params) { resp ->
 		result = resp.data
 	}
 
@@ -423,11 +424,11 @@ def prefInstallRepositorySearchResults() {
 		searchResults = searchResults.sort { it -> it.name }
 		return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 			displayHeader()
-			
+
 			section {
 				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSrcTxt Search"
 				addCss()
-			}    
+			}
 			section {
 				if (searchResults.size() > 0) {
 					def i = 0
@@ -444,7 +445,7 @@ def prefInstallRepositorySearchResults() {
 				input "btnMainMenu", "button", title: "Main Menu", width: 3
 				input "btnBack", "button", title: "Back", width: 3
 			}
-			
+
 		}
 	}
 }
@@ -497,7 +498,7 @@ def renderTags(pkgList) {
 	def tags = []
 
 	for (pkg in pkgList) {
-		
+
 		if (state.categoriesAndTags.categories.contains(pkg.category)) {
 			if (!tags.contains(pkg.category))
 				tags << pkg.category
@@ -537,7 +538,7 @@ def prefInstallChoices(params) {
 				renderTags(allPackages)
 				if(pkgTags) {
 					renderSortBy()
-					
+
 					def matchingPackages = []
 					for (pkg in allPackages) {
 						if (state.manifests.containsKey(pkg.location)) {
@@ -555,7 +556,7 @@ def prefInstallChoices(params) {
 
 					if (sortedMatchingPackages.size() > 0) {
 						def i = 0
-						for (pkg in sortedMatchingPackages) {                        
+						for (pkg in sortedMatchingPackages) {
 							renderPackageButton(pkg,i)
 							i++
 						}
@@ -565,8 +566,8 @@ def prefInstallChoices(params) {
 					}
 			}
 		}
-		
-		if (installMode == "search" || (installMode == "repository" && params != null)) { 
+
+		if (installMode == "search" || (installMode == "repository" && params != null)) {
 			pkgInstall = params.location
 			app.updateSetting("pkgInstall", params.location)
 			state.payPalUrl = params.payPalUrl
@@ -586,7 +587,7 @@ def prefInstallChoices(params) {
 
 			if (manifest.minimumHEVersion != null && !verifyHEVersion(manifest.minimumHEVersion)) {
 				return buildErrorPage("Unsupported Hubitat Firmware", "Your Hubitat Elevation firmware is not supported. You are running ${location.hub.firmwareVersionString} and this package requires  at least ${manifest.minimumHEVersion}. Please upgrade your firmware to continue installing.")
-			} 
+			}
 			else {
 				def apps = getOptionalAppsFromManifest(manifest)
 				def drivers = getOptionalDriversFromManifest(manifest)
@@ -613,7 +614,7 @@ def prefInstallChoices(params) {
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
-	}    
+	}
 }
 
 def getRepoName(location) {
@@ -652,7 +653,7 @@ def performRepositoryRefreshComplete(results, data)
 				category: pkg.category,
 				tags: pkg.tags
 			]
-			
+
 			allPackages << pkgDetails
 			if (!categories.contains(pkgDetails.category))
 				categories << pkgDetails.category
@@ -669,15 +670,15 @@ def prefInstallVerify() {
 	if (state.mainMenu)
 		return prefOptions()
 	logDebug "prefInstallVerify"
-	
+
 	if(!pkgInstall) return buildErrorPage("no package selected", "whats up?")	// pr #114
 	atomicState.backgroundActionInProgress = null
-	statusMessage = ""        
+	statusMessage = ""
 	errorOccurred = null
 	errorTitle = null
 	errorMessage = null
-	
-	
+
+
 	return dynamicPage(name: "prefInstallVerify", title: "", nextPage: "prefInstall", install: false, uninstall: false) {
 		displayHeader()
 		section {
@@ -691,12 +692,12 @@ def prefInstallVerify() {
 			}
 			else
 				paragraph "Click the next button to install your selections. This may take some time..."
-			
-			def primaryApp = manifest?.apps?.find { item -> item.primary == true }    
-	
+
+			def primaryApp = manifest?.apps?.find { item -> item.primary == true }
+
 			if (primaryApp)
 				input "launchInstaller", "bool", defaultValue: true, title: "Configure the installed package after installation completes."
-			
+
 		}
 		section {
 			paragraph "<hr>"
@@ -734,7 +735,7 @@ def prefInstall() {
 			return complete("Installation complete", "The package was sucessfully installed, click Next to return to the Main Menu.")
 		else
 			return complete("Installation complete", "The package was sucessfully installed, click Next to configure your new package.", false, primaryApp.heID)
-		
+
 	}
 }
 
@@ -742,7 +743,7 @@ def performInstallation() {
 	if (!login())
 		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
 	def manifest = getJSONFile(pkgInstall)
-	
+
 	if (shouldInstallBeta(manifest)) {
 		manifest = getJSONFile(getItemDownloadLocation(manifest))
 		manifest.beta = true
@@ -754,7 +755,7 @@ def performInstallation() {
 	state.manifests[pkgInstall].payPalUrl = state.payPalUrl
 	state.payPalUrl = null
 	minimizeStoredManifests()
-	
+
 	// Download all files first to reduce the chances of a network error
 	def appFiles = [:]
 	def driverFiles = [:]
@@ -763,13 +764,13 @@ def performInstallation() {
 	def fileMgrResults = downloadFileManagerFiles(manifest)
 	if (fileMgrResults.success)
 		fileManagerFiles = fileMgrResults.files
-	else 
+	else
 		return triggerError("Failed download of file", "An error occurred downloading ${fileMgrResults.name}", false)
-	
+
 	def requiredApps = getRequiredAppsFromManifest(manifest)
 	def requiredDrivers = getRequiredDriversFromManifest(manifest)
 	def requiredBundles = getRequiredBundlesFromManifest(manifest)
-	
+
 	for (requiredApp in requiredApps) {							// required = true
 		def location = getItemDownloadLocation(requiredApp.value)
 		setBackgroundStatusMessage("Downloading ${requiredApp.value.name}")
@@ -803,7 +804,7 @@ def performInstallation() {
 		}
 		driverFiles[location] = fileContents
 	}
-	
+
 	for (driverToInstall in driversToInstall) {					// required = false (aka optional)
 		def matchedDriver = manifest.drivers.find { it.id == driverToInstall}
 		if (matchedDriver != null) {
@@ -819,11 +820,12 @@ def performInstallation() {
 	}
 
 	initializeRollbackState("install")
-	// All files downloaded, execute installs.
+	// All files downloaded, execute installs
 	for (bundleToInstall in requiredBundles) {					// required = true
 		def location = getItemDownloadLocation(bundleToInstall.value)
+		def primary = bundleToInstall.primary ?: false
 		setBackgroundStatusMessage("Installing ${bundleToInstall.value.name}") // from $location")
-		if (!installBundle(location)) {
+		if (!installBundle(location, primary)) {
 			state.manifests.remove(pkgInstall)
 			return rollback("Failed to install bundle ${bundleToInstall.value.name} using ${location}. Please notify the package developer.", false)
 		}
@@ -833,8 +835,9 @@ def performInstallation() {
 		def matchedBundle = manifest.bundles.find { it.id == bundleToInstall}
 		if (matchedBundle != null) {
 			def location = getItemDownloadLocation(matchedBundle)
+			def primary = matchedBundle.primary ?: false
 			setBackgroundStatusMessage("Installing ${matchedBundle.name} from $location")
-			if (!installBundle(location)) {
+			if (!installBundle(location, primary)) {
 				state.manifests.remove(pkgInstall)
 				return rollback("Failed to install bundle ${matchedBundle.name} using ${location}. Please notify the package developer.", false)
 			}
@@ -854,7 +857,7 @@ def performInstallation() {
 		if (requiredApp.value.oauth)
 			enableOAuth(requiredApp.value.heID)
 	}
-	
+
 	for (appToInstall in appsToInstall) {						// required = false (aka optional)
 		def matchedApp = manifest.apps.find { it.id == appToInstall}
 		if (matchedApp != null) {
@@ -871,7 +874,7 @@ def performInstallation() {
 				enableOAuth(matchedApp.heID)
 		}
 	}
-	
+
 	for (requiredDriver in requiredDrivers) {						// required = true
 		def location = getItemDownloadLocation(requiredDriver.value)
 		setBackgroundStatusMessage("Installing ${requiredDriver.value.name}")
@@ -883,7 +886,7 @@ def performInstallation() {
 		requiredDriver.value.heID = id
 		requiredDriver.value.beta = shouldInstallBeta(requiredDriver.value)
 	}
-	
+
 	for (driverToInstall in driversToInstall) {					// required = false (aka optional)
 		def matchedDriver = manifest.drivers.find { it.id == driverToInstall}
 		if (matchedDriver != null) {
@@ -939,7 +942,7 @@ def prefPkgModifyChoices() {
 		return prefOptions()
 	logDebug "prefPkgModifyChoices"
 	def manifest = getInstalledManifest(pkgModify)
-	
+
 	def optionalApps = getOptionalAppsFromManifest(manifest)
 	def optionalDrivers = getOptionalDriversFromManifest(manifest)
 	def optionalBundles = getOptionalBundlesFromManifest(manifest)
@@ -952,13 +955,13 @@ def prefPkgModifyChoices() {
 				installedOptionalApps << optApp.key
 			}
 		}
-		
+
 		for (optDriver in optionalDrivers) {
 			if (isDriverInstalled(manifest, optDriver.key)) {
 				installedOptionalDrivers << optDriver.key
 			}
 		}
-		
+
 		for (optBundle in optionalBundles) {
 			if (isBundleInstalled(manifest, optBundle.key)) {
 				installedOptionalBundles << optBundle.key
@@ -1011,7 +1014,7 @@ def prefVerifyPackageChanges() {
 	driversToUninstallForModify = []
 	driversToInstallForModify = []
 	def hasChanges = false
-	
+
 	def manifest = getInstalledManifest(pkgModify)
 	for (optApp in appsToModify) {
 		if (!isAppInstalled(manifest,optApp)) {
@@ -1029,7 +1032,7 @@ def prefVerifyPackageChanges() {
 		}
 	}
 	driversToInstallStr += "</ul>"
-	
+
 	def installedApps = getInstalledOptionalApps(manifest)
 	def installedDrivers = getInstalledOptionalDrivers(manifest)
 	for (installedApp in installedApps) {
@@ -1040,7 +1043,7 @@ def prefVerifyPackageChanges() {
 		}
 	}
 	appsToUninstallStr += "</ul>"
-	
+
 	for (installedDriver in installedDrivers) {
 		if (!driversToModify?.contains(installedDriver)) {
 			driversToUninstallStr += "<li>${getDriverById(manifest,installedDriver).name}</li>"
@@ -1074,7 +1077,7 @@ def prefVerifyPackageChanges() {
 					paragraph "The following drivers will be installed: ${driversToInstallStr}"
 				if (bundlesToInstallStr != "<ul></ul>")
 					paragraph "The following bundles will be installed: ${bundlesToInstallStr}"
-				
+
 				if (driversToUninstallStr != "<ul></ul>" || appsToUninstallStr != "<ul></ul>")
 					paragraph "Please be sure that the apps and drivers to be uninstalled are not in use before clicking Next."
 			}
@@ -1129,13 +1132,13 @@ def prefMakePackageChanges() {
 def performModify() {
 	if (!login())
 		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
-	
+
 	// Download all files first to reduce the chances of a network error
 	def appFiles = [:]
 	def driverFiles = [:]
 	def bundleFiles = [:]
 	def manifest = getInstalledManifest(pkgModify)
-	
+
 	for (appToInstall in appsToInstallForModify) {
 		def app = getAppById(manifest, appToInstall)
 		def location = getItemDownloadLocation(app)
@@ -1143,7 +1146,7 @@ def performModify() {
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
 			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
-		} 
+		}
 		appFiles[location] = fileContents
 	}
 	for (driverToInstall in driversToInstallForModify) {
@@ -1156,7 +1159,7 @@ def performModify() {
 		}
 		driverFiles[location] = fileContents
 	}
-	
+
 	initializeRollbackState("modify")
 	for (bundleToInstall in bundlesToInstallForModify) {
 		def location = getItemDownloadLocation(bundleToInstall)
@@ -1195,7 +1198,7 @@ def performModify() {
 		else
 			return rollback("Failed to uninstall app ${app.name}, it may be in use. Please delete all instances of this app before uninstalling the package.", false)
 	}
-	
+
 	for (driverToInstall in driversToInstallForModify) {
 		def driver = getDriverById(manifest, driverToInstall)
 		def location = getItemDownloadLocation(driver)
@@ -1206,7 +1209,7 @@ def performModify() {
 		}
 		else
 			return rollback("Failed to install driver ${location}. Please notify the package developer.", false)
-		
+
 	}
 	for (driverToUninstall in driversToUninstallForModify) {
 		def driver = getDriverById(manifest, driverToUninstall)
@@ -1290,19 +1293,19 @@ def prefPkgRepairExecute() {
 def performRepair() {
 	if (!login())
 		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", runInBackground)
-	
+
 	def installedApps = getAppList()
 	def installedDrivers = getDriverList()
-	
+
 	// Download all files first to reduce the chances of a network error
 	def appFiles = [:]
 	def driverFiles = [:]
 	def fileManagerFiles = [:]
 	def bundleFiles = [:]
-	
+
 	def installedManifest = state.manifests[pkgRepair]
 	def manifest = getJSONFile(pkgRepair)
-	
+
 	if (manifest) {
 		def fileMgrResults = downloadFileManagerFiles(manifest)
 		if (fileMgrResults.success)
@@ -1318,7 +1321,7 @@ def performRepair() {
 				if (fileContents == null) {
 					return triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 				}
-				appFiles[location] = fileContents    
+				appFiles[location] = fileContents
 			}
 			else if (app.required) {
 				setBackgroundStatusMessage("Downloading ${app.name} because it is required and not installed")
@@ -1355,10 +1358,10 @@ def performRepair() {
 	else {
 		return triggerError("Failed download of file", "The manifest file ${pkg} no longer seems to be valid.", runInBackground)
 	}
-	
+
 	if (manifest) {
 		initializeRollbackState("update")
-		
+
 		manifestForRollback = installedManifest
 		for (bundleToInstall in manifest.bundles) {
 			def location = getItemDownloadLocation(bundleToInstall)
@@ -1401,7 +1404,7 @@ def performRepair() {
 					return rollback("Failed to install app ${location}.  Please notify the package developer.", runInBackground)
 			}
 		}
-		
+
 		for (driver in manifest.drivers) {
 			def driverHeID = getDriverById(installedManifest,driver.id)?.heID
 			if (isDriverInstalled(installedManifest,driver.id) && installedDrivers.find { it -> it.id == driverHeID }) {
@@ -1447,7 +1450,7 @@ def performRepair() {
 	}
 	else {
 	}
-	
+
 	logDebug "Repair complete"
 	if (runInBackground != true)
 		atomicState.backgroundActionInProgress = false
@@ -1484,7 +1487,7 @@ def prefPkgUninstallConfirm() {
 		section {
 			paragraph "<b>Uninstall Packages</b>"
 			paragraph "The following apps and drivers will be removed:"
-			
+
 			def str = "<ul>"
 			for (pkgToUninstall in pkgUninstall) {
 				def pkg = state.manifests[pkgToUninstall]
@@ -1492,7 +1495,7 @@ def prefPkgUninstallConfirm() {
 					if (app.heID != null)
 						str += "<li>${app.name} (App)</li>"
 				}
-				
+
 				for (driver in pkg.drivers) {
 					if (driver.heID != null)
 						str += "<li>${driver.name} (Device Driver)</li>"
@@ -1544,12 +1547,12 @@ def prefUninstall() {
 def performUninstall() {
 	if (!login())
 		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
-	
+
 	for (pkgToUninstall in pkgUninstall) {
 		def pkg = state.manifests[pkgToUninstall]
-	
+
 		initializeRollbackState("uninstall")
-				
+
 		for (app in pkg.apps) {
 			if (app.heID != null) {
 				def sourceCode = getAppSource(app.heID)
@@ -1558,11 +1561,11 @@ def performUninstall() {
 				{
 					completedActions["appUninstalls"] << [id:app.id,source:sourceCode]
 				}
-				else 
+				else
 					return rollback("Failed to uninstall app ${app.location}, it may be in use. Please delete all instances of this app before uninstalling the package.", false)
 			}
 		}
-	
+
 		for (driver in pkg.drivers) {
 			if (driver.heID != null) {
 				def sourceCode = getDriverSource(driver.heID)
@@ -1570,7 +1573,7 @@ def performUninstall() {
 				if (uninstallDriver(driver.heID)) {
 					completedActions["driverUninstalls"] << [id:driver.id,source:sourceCode]
 				}
-				else 
+				else
 					return rollback("Failed to uninstall driver ${driver.location}. Please delete all instances of this device before uninstalling the package.", false)
 			}
 
@@ -1598,9 +1601,9 @@ def performUninstall() {
 
 		state.manifests.remove(pkgToUninstall)
 	}
-	
+
 	atomicState.backgroundActionInProgress = false
-}    
+}
 
 def addUpdateDetails(pkgId, pkgName, releaseNotes, updateType, item, forceProduction = false) {
 	if (updateDetails[pkgId] == null)
@@ -1610,7 +1613,7 @@ def addUpdateDetails(pkgId, pkgName, releaseNotes, updateType, item, forceProduc
 	if (releaseNotes != null)
 		updateDetails[pkgId].releaseNotes = releaseNotes
 	updateDetails[pkgId].items << [type: updateType,  id: item?.id, name: item?.name, forceProduction: forceProduction]
-	
+
 	logDebug "Updates found ${updateType} for ${pkgId} -> ${item?.name} (force production: ${forceProduction})"
 }
 
@@ -1634,7 +1637,7 @@ def performUpdateCheck() {
 			}
 			else
 				manifest.beta = false
-			
+
 			if (manifest == null) {
 				log.warn "Found a bad manifest ${pkg.key}, please notify the package developer."
 				continue
@@ -1643,7 +1646,7 @@ def performUpdateCheck() {
 			if (manifest.minimumHEVersion != null && !verifyHEVersion(manifest.minimumHEVersion)) {
 				log.warn "New version of ${manifest.packageName} found but requires ${manifest.minimumHEVersion}, please update your firmware to upgrade."
 				continue
-			} 
+			}
 
 			def newVersionResult = newVersionAvailable(manifest, state.manifests[pkg.key])
 			if (newVersionResult.newVersion) {
@@ -1651,7 +1654,7 @@ def performUpdateCheck() {
 				packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (installed: ${state.manifests[pkg.key].version ?: "N/A"} current: ${version})"]
 				logDebug "Updates found for package ${pkg.key}"
 				addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "package", null, newVersionResult.forceProduction)
-			} 
+			}
 			else {
 				def appOrDriverNeedsUpdate = false
 				for (app in manifest.apps) {
@@ -1682,7 +1685,7 @@ def performUpdateCheck() {
 							addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "optapp", app, false)
 						}
 					}
-					catch (any) { 
+					catch (any) {
 						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. Please notify the package developer."
 					}
 				}
@@ -1718,7 +1721,7 @@ def performUpdateCheck() {
 						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
 					}
 				}
-			}    
+			}
 		}
 		catch (e) {
 			logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
@@ -1765,7 +1768,7 @@ def prefPkgUpdate() {
 					input "pkgsToUpdate", "enum", title: "Which packages do you want to update?", multiple: true, required: true, options:packagesWithUpdates, submitOnChange: true
 
 				}
-				
+
 				if (updateDetails?.size() > 0 && pkgsToUpdate != null) {
 					for (pkgToUpdate in pkgsToUpdate) {
 						def updateDetailsForPkg = updateDetails[pkgToUpdate]
@@ -1780,7 +1783,7 @@ def prefPkgUpdate() {
 							input "pkgsToAddOpt", "enum", title: "One or more packages has new optional components. Choose which ones to add", multiple: true, options:optionalItemsToShow
 						}
 					}
-					
+
 				}
 				section {
 					if (updateDetails?.size() > 0 && pkgsToUpdate != null)
@@ -1791,7 +1794,7 @@ def prefPkgUpdate() {
 				section {
 					paragraph "<hr>"
 					input "btnMainMenu", "button", title: "Main Menu", width: 3
-					
+
 				}
 			}
 		}
@@ -1814,30 +1817,30 @@ def prefPkgVerifyUpdates() {
 	errorMessage = null
 
 	def updatesToInstall = "<ul>"
-	
+
 	if (pkgsToUpdate.size() == packagesWithUpdates.size())
 		app.updateLabel("Hubitat Package Manager")
 	else
-		app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")    
-	
+		app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")
+
 	for (pkg in pkgsToUpdate) {
 		updatesToInstall += "<li>${state.manifests[pkg].packageName}"
-		
+
 		if (updateDetails[pkg].releaseNotes != null) {
 			updatesToInstall += "<br>"
 			updatesToInstall += "<textarea rows=6 class='mdl-textfield' readonly='true'>${updateDetails[pkg].releaseNotes}</textarea>"
 		}
-		
+
 		updatesToInstall += "</li>"
 	}
-	
+
 	updatesToInstall += "</ul>"
 	def optStrToInstall = "<ul>"
 	for (optItem in pkgsToAddOpt) {
 		optStrToInstall += "<li>${optionalItemsToShow[optItem]}</li>"
 	}
 	optStrToInstall += "</ul>"
-	
+
 	return dynamicPage(name: "prefPkgVerifyUpdates", title: "", nextPage: "prefPkgUpdatesComplete", install: false, uninstall: false) {
 		displayHeader()
 		section {
@@ -1857,7 +1860,7 @@ def prefPkgVerifyUpdates() {
 def prefPkgUpdatesComplete() {
 	if (state.mainMenu)
 		return prefOptions()
-	
+
 	if (errorOccurred == true) {
 		return buildErrorPage(errorTitle, errorMessage)
 	}
@@ -1884,7 +1887,7 @@ def prefPkgUpdatesComplete() {
 			}
 		}
 	}
-	else {    
+	else {
 		if (!atomicState.hpmUpgraded)
 			return complete("Updates complete", "The updates have been installed, click Next to return to the Main Menu.")
 		else {
@@ -1933,27 +1936,27 @@ def performUpdates(runInBackground) {
 		resultData.success = false
 		return resultData
 	}
-		
+
 	// Download all files first to reduce the chances of a network error
 	def downloadedManifests = [:]
 	def appFiles = [:]
 	def driverFiles = [:]
 	def fileManagerFiles = [:]
-	
+
 	for (pkg in pkgsToUpdate) {
 		def manifest = getJSONFile(pkg)
-		
+
 		if (shouldInstallBeta(manifest)) {
 			manifest = getJSONFile(getItemDownloadLocation(manifest))
 			if (manifest)
 				manifest.beta = true
-			else 
+			else
 				manifest = getJSONFile(pkg)
 		}
 		else
 			manifest.beta = false
 		def installedManifest = state.manifests[pkg]
-		
+
 		downloadedManifests[pkg] = manifest
 		if (manifest) {
 			def fileMgrResults = downloadFileManagerFiles(manifest)
@@ -1977,7 +1980,7 @@ def performUpdates(runInBackground) {
 							resultData.message = triggerError("Failed download of file", "An error occurred downloading ${location}", runInBackground)
 							return resultData
 						}
-						appFiles[location] = fileContents    
+						appFiles[location] = fileContents
 					}
 				}
 				else if (app.required && !optionalItemsOnly(pkg)) {
@@ -2087,18 +2090,18 @@ def performUpdates(runInBackground) {
 			return resultData
 		}
 	}
-	
+
 	for (pkg in pkgsToUpdate) {
 		def manifest = downloadedManifests[pkg]
 		def installedManifest = state.manifests[pkg]
-		
+
 		if (manifest) {
 			initializeRollbackState("update")
-			
+
 			manifestForRollback = manifest
 			if (manifest.betaVersion && includeBetas)
 				manifest.beta = true
-			
+
 			for (bundleToInstall in manifest.bundles) {
 				def location = getItemDownloadLocation(bundleToInstall)
 				setBackgroundStatusMessage("Installing ${location}")
@@ -2184,7 +2187,7 @@ def performUpdates(runInBackground) {
 					}
 				}
 			}
-			
+
 			for (driver in manifest.drivers) {
 				if (isDriverInstalled(installedManifest,driver.id)) {
 					if (shouldUpgrade(pkg, driver.id)) {
@@ -2332,8 +2335,8 @@ def prefPkgMatchUpVerify() {
 		{
 			def itemsForList = [:]
 			for (pkg in packagesMatchingInstalledEntries) {
-				
-				def appAndDriverMatches = ((pkg.matchedApps?.collect { it -> it.title } ?: []) + (pkg.matchedDrivers?.collect { it -> it.title } ?: [])).join(", ")            
+
+				def appAndDriverMatches = ((pkg.matchedApps?.collect { it -> it.title } ?: []) + (pkg.matchedDrivers?.collect { it -> it.title } ?: [])).join(", ")
 				itemsForList << ["${pkg.location}":"${pkg.name} - matched (${appAndDriverMatches})"]
 			}
 			itemsForList = itemsForList.sort { it-> it.value}
@@ -2351,14 +2354,14 @@ def prefPkgMatchUpVerify() {
 						input "btnMainMenu", "button", title: "Main Menu", width: 3
 					}
 				}
-			}            
+			}
 		}
 		else {
 			state.firstRun = false
 			return complete("Match Up Complete", "No matching packages were found, click Next to return to the Main Menu.")
 		}
 
-	}    
+	}
 }
 
 def performPackageMatchup() {
@@ -2423,7 +2426,7 @@ def performMatchupManifestsComplete(results, data) {
 				allInstalledDrivers.removeIf {it -> it.id == driver.heID}
 		}
 	}
-	
+
 	def packagesToMatchAgainst = []
 	for (uri in results.keySet()) {
 		def result = results[uri]
@@ -2448,7 +2451,7 @@ def performMatchupManifestsComplete(results, data) {
 	for (pkg in packagesToMatchAgainst) {
 		def matchedInstalledApps = []
 		def matchedInstalledDrivers = []
-		
+
 		for (app in pkg.manifest.apps) {
 			def appsToAdd = findMatchingAppOrDriver(allInstalledApps, app)
 			if (appsToAdd != null)
@@ -2465,7 +2468,7 @@ def performMatchupManifestsComplete(results, data) {
 			packagesMatchingInstalledEntries << pkg
 		}
 	}
-	
+
 	atomicState.backgroundActionInProgress = false
 }
 
@@ -2473,7 +2476,7 @@ def prefPkgMatchUpComplete() {
 	if (state.mainMenu)
 		return prefOptions()
 	logDebug "prefPkgMatchUpComplete"
-	
+
 	for (match in pkgMatches) {
 		def matchFromState = packagesMatchingInstalledEntries.find {it -> it.location == match}
 		if (matchFromState) {
@@ -2490,7 +2493,7 @@ def prefPkgMatchUpComplete() {
 						app.version = "0.0"
 				}
 			}
-			
+
 			for (driver in manifest.drivers) {
 				def installedDriver = findMatchingAppOrDriver(installedDrivers, driver)
 				if (installedDriver != null) {
@@ -2531,7 +2534,7 @@ def prefPkgUnMatch() {
 		return prefOptions()
 	state.remove("UnMatch")
 	logDebug "prefPkgUnMatch"
-	
+
 	def pkgsToList = getInstalledPackages(false)
 
 	return dynamicPage(name: "prefPkgUnMatch", title: "", nextPage: "prefPkgUnMatchVerify", install: false, uninstall: false) {
@@ -2550,13 +2553,13 @@ def prefPkgUnMatchVerify() {
 	if (state.mainMenu)
 		return prefOptions()
 	logDebug "prefPkgUnMatchVerify"
-	
+
 	return dynamicPage(name: "prefPkgUnMatchVerify", title: "", nextPage: "prefPkgUnMatchComplete", install: false, uninstall: false) {
 		displayHeader()
 		section {
 			paragraph "<b>Un-Match Confirm</b>"
 			paragraph "The following packages will be Un-Matched:"
-			
+
 			def str = "<ul>"
 			for (pkgToUnM in pkgUnMatch) {
 				def pkg = state.manifests[pkgToUnM]
@@ -2564,7 +2567,7 @@ def prefPkgUnMatchVerify() {
 					if (app.heID != null)
 						str += "<li>${app.name} (App)</li>"
 				}
-				
+
 				for (driver in pkg.drivers) {
 					if (driver.heID != null)
 						str += "<li>${driver.name} (Device Driver)</li>"
@@ -2590,11 +2593,11 @@ def prefPkgUnMatchComplete() {
 	if (state.mainMenu)
 		return prefOptions()
 	logDebug "prefPkgUnMatchComplete"
-	
+
 	for (pkgToUnM in pkgUnMatch) {
 		state.manifests.remove(pkgToUnM)
 	}
-	
+
 	return dynamicPage(name: "prefPkgUnMatchComplete", title: "", install: true, uninstall: false) {
 		displayHeader()
 		section {
@@ -2614,9 +2617,9 @@ def prefPkgView() {
 
 	def appsManaged = []
 	def driversManaged = []
-	
+
 	def str = "<ul>"
-	
+
 	def sortedPkgs = state.manifests.sort{ it-> it.value.packageName}
 	for (pkg in sortedPkgs) {
 		def prependBar = false
@@ -2691,19 +2694,19 @@ def checkForUpdates() {
 	def allUpgradeCount = 0
 	def packagesWithLabels = performUpdateCheck()
 	def packagesWithUpdates = packagesWithLabels?.keySet() as List
-	
-	
+
+
 	if (packagesWithUpdates?.size() == 0)
 		app.updateLabel("Hubitat Package Manager")
 	else {
 		allUpgradeCount = packagesWithUpdates?.size()?: 0
-		
+
 		if (notifyUpdatesAvailable && !state.updatesNotified) {
 			logDebug "Sending update notification"
 			state.updatesNotified = true
 			notifyDevices*.deviceNotification(buildNotification("Hubitat Package updates are available"))
 		}
-		
+
 		if (autoUpdateMode != "Never") {
 			if (isHubSecurityEnabled() && !hpmSecurity) {
 				log.error "Hub security is enabled but not configured in Package Manager. Updates cannot be installed."
@@ -2868,7 +2871,7 @@ def isAppInstalled(manifest, id) {
 def isDriverInstalled(manifest, id) {
 	for (driver in manifest.drivers) {
 		if (driver.id == id) {
-			if (driver.heID != null) 
+			if (driver.heID != null)
 				return true
 			else
 				return false
@@ -3007,7 +3010,7 @@ def getJSONFile(uri) {
 	}
 	catch (e) {
 		return null
-	}    
+	}
 }
 
 def getMultipleJSONFilesCallback(resp, data) {
@@ -3016,7 +3019,7 @@ def getMultipleJSONFilesCallback(resp, data) {
 	synchronized (downloadQueue) {
 		downloadQueue[data.batchid]?.results[data.uri]?.result = resp
 		downloadQueue[data.batchid]?.results[data.uri]?.complete = true
-		
+
 		def queuedItem = downloadQueue[data.batchid].results.find { k, v -> v.queued == true}
 		if (queuedItem != null) {
 			def itemValue = queuedItem.value
@@ -3043,9 +3046,9 @@ def getMultipleJSONFiles(uriList, completeCallback, statusCallback, data = null)
 		for (removeItem in itemsToRemove) {
 			downloadQueue.remove(removeItem)
 		}
-		
+
 		downloadQueue[batchid] = [totalBatchSize: uriList.size(), results: [:]]
-		
+
 		for (uri in uriList) {
 			if (downloadQueue[batchid].results.count { k, v -> v.queued == false} < maxDownloadQueueSize) {
 				downloadQueue[batchid].results[uri] = [complete: false, result: null, queued: false]
@@ -3065,7 +3068,7 @@ def getJSONFileAsync(String uri, String callback, Map data = null) {
 	}
 	catch (e) {
 		return null
-	}    
+	}
 }
 
 def getJSONAsyncResult(resp, data) {
@@ -3110,7 +3113,7 @@ def getOptionalBundlesFromManifest(manifest) {
 def getRequiredAppsFromManifest(manifest) {
 	def appsList = [:]
 	for (app in manifest.apps) {
-		if (app.required == true)
+		if (app.required == true || app.required == "true")
 			appsList << ["${app.id}":app]
 	}
 	return appsList
@@ -3119,7 +3122,7 @@ def getRequiredAppsFromManifest(manifest) {
 def getRequiredDriversFromManifest(manifest) {
 	def driversList = [:]
 	for (driver in manifest.drivers) {
-		if (driver.required == true)
+		if (driver.required == true || driver.required == "true")
 			driversList << ["${driver.id}":driver]
 	}
 	return driversList
@@ -3128,7 +3131,7 @@ def getRequiredDriversFromManifest(manifest) {
 def getRequiredBundlesFromManifest(manifest) {
 	def bundlesList = [:]
 	for (bundle in manifest.bundles) {
-		if (bundle.required == true)
+		if (bundle.required == true || bundle.required == "true")
 			bundlesList << ["${bundle.id}":bundle]
 	}
 	return bundlesList
@@ -3164,14 +3167,14 @@ def verifyHEVersion(versionStr) {
 
 def compareVersions(oldVersion, newVersion) {
 	newVersion = newVersion.replaceAll("[^\\d.]", "")
-	oldVersion = oldVersion?.replaceAll("[^\\d.]", "")    
-	
+	oldVersion = oldVersion?.replaceAll("[^\\d.]", "")
+
 	if (newVersion == oldVersion)
 		return 0
 
 	def oldVersionParts = oldVersion?.split(/\./)
 	def newVersionParts = newVersion.split(/\./)
-	
+
 	for (def i = 0; i < newVersionParts.size(); i++) {
 		if (i >= oldVersionParts.size()) {
 			return 1
@@ -3189,7 +3192,7 @@ def newVersionAvailable(item, installedItem) {
 	def result = [newVersion: false, forceProduction: false]
 	def versionStr = includeBetas && item.betaVersion != null ? item?.betaVersion : item?.version
 	def installedVersionStr = installedItem.beta ? (installedItem?.betaVersion ?: installedItem?.version) : installedItem?.version
-	
+
 	if (versionStr == null)
 		return result
 	if (installedVersionStr == null) {
@@ -3241,7 +3244,7 @@ def login() {
 				[
 					uri: "http://127.0.0.1:8080",
 					path: "/login",
-					query: 
+					query:
 					[
 						loginRedirect: "/"
 					],
@@ -3311,7 +3314,7 @@ def installApp(appCode) {
 	catch (e) {
 		log.error "Error installing app: ${e}"
 	}
-	return null    
+	return null
 }
 
 def upgradeApp(id,appCode) {
@@ -3431,7 +3434,7 @@ def getAppSource(id) {
 	catch (e) {
 		log.error "Error retrieving app source: ${e}"
 	}
-	return null    
+	return null
 }
 
 def getAppVersion(id) {
@@ -3484,7 +3487,7 @@ def installDriver(driverCode) {
 				result = null
 		}
 		return result
-	} 
+	}
 	catch (e) {
 		log.error "Error installing driver: ${e}"
 	}
@@ -3584,7 +3587,7 @@ def getDriverSource(id) {
 	catch (e) {
 		log.error "Error retrieving driver source: ${e}"
 	}
-	return null    
+	return null
 }
 
 def getDriverVersion(id) {
@@ -3636,7 +3639,7 @@ Content-Disposition: form-data; name="folder"
 			ignoreSSLIssues: true
 		]
 		httpPost(params) { resp ->
-			
+
 		}
 		return true
 	}
@@ -3676,7 +3679,7 @@ def uninstallFile(id, fileName) {
 }
 
 // Bundle Installation Methods
-def installBundle(bundleLocation) {
+def installBundle(bundleLocation, bundlePrimary) {
 	try
 	{
         def params = [
@@ -3688,9 +3691,9 @@ def installBundle(bundleLocation) {
             ],
  		body: groovy.json.JsonOutput.toJson(
 			url: bundleLocation,
-			installer: false,
+			installer: bundlePrimary,
 			pwd: ""
-		), 
+		),
             timeout: 90,
             ignoreSSLIssues: true
         ]
@@ -3707,24 +3710,24 @@ def installBundle(bundleLocation) {
 
 
 def uninstallBundle(bundleName) {
-// Bundles don't return an ID when added, the ID has to be extracted by scraping /bundles/list 
+// Bundles don't return an ID when added, the ID has to be extracted by scraping /bundles/list
 
-// in platform v2.3.2 getInstalledBundlesList() was added, 
-//     A function returning a list of Maps with attributes id, name, and namespace, one Map per bundle.
+// in platform v2.3.2 getInstalledBundlesList() was added,
+//     A function returning a list of Maps with attributes id, name, and namespace, one Map per bundle
 
-    if (location.hub.firmwareVersionString >= "2.3.2.120") { 
+    if (location.hub.firmwareVersionString >= "2.3.2.120") {
     	  HEid = getInstalledBundlesList().findAll{it.name == bundleName}.id[0]
     }
-    else 
+    else
     {
 	  def gIB = []
         def params = [
     	      uri: "http://127.0.0.1:8080/bundle/list",
     	      contentType: "text/html",
     	      textParser: true,
-    	      headers: ["Cookie": cookie]                   
+    	      headers: ["Cookie": cookie]
     	  ]
-	  
+
     	  try {
     	      httpGet(params) { resp ->
 			if(resp!= null) {
@@ -3747,8 +3750,8 @@ def uninstallBundle(bundleName) {
 
     	  HEid = gIB.findAll{it.name == bundleName}.id[0]
     }
- 
-// let's delete the Bundle's HEid found above.
+
+// let's delete the Bundle's HEid found above
 	try {
 		params = [
 			uri: "http://127.0.0.1:8080",
@@ -3767,14 +3770,14 @@ def uninstallBundle(bundleName) {
 	catch (e) {
 		log.error "Error uninstalling file: ${e}"
 	}
-	return false 
+	return false
 }
 
 def setBackgroundStatusMessage(msg, level="info") {
 	if (statusMessage == null)
 		statusMessage = ""
 	if (level == "warn") log.warn msg
-	if (settings?.txtEnable != false && level == "info") log.info msg 
+	if (settings?.txtEnable != false && level == "info") log.info msg
 	statusMessage += "${msg}<br>"
 }
 
@@ -3795,15 +3798,15 @@ def complete(title, message, done = false, appID = null) {
 	completedActions = null
 	manifestForRollback = null
 	clearStateSettings(false)
-	
+
 	def nextPage = "prefOptions"
 	def install = false
-	
+
 	if (done) {
 		install = true
 		nextPage = ""
 	}
-	
+
 	return dynamicPage(name: "prefComplete", title: "", install: install, uninstall: false, nextPage: nextPage) {
 		displayHeader()
 		section {
@@ -3894,7 +3897,7 @@ def installHPMManifest() {
 			return false
 		}
 		def appsInstalled = getAppList()
-		
+
 		logDebug "Installing HPM Manifest"
 		def manifest = getJSONFile(state.repositoryListingJSON.hpm.location)
 		if (manifest == null) {
@@ -3924,7 +3927,7 @@ def updateRepositoryListing() {
 	def oldListOfRepositories = state.repositoryListingJSON.repositories
 	state.repositoryListingJSON = getJSONFile(repositoryListing)		// get the Master Manifest file
 	if (state.customRepositories) {
-		state.customRepositories.each { r -> 
+		state.customRepositories.each { r ->
 			state.repositoryListingJSON.repositories << [name: r.value, location: r.key]
 		}
 	}
@@ -3939,18 +3942,18 @@ def updateRepositoryListing() {
 				logInfo "A new repository was added, ${newRepo.location}"
 				installedRepositories << newRepo.location
 				addedRepositories << newRepo.location
-			} 
+			}
 		}
 		oldListOfRepositories.removeAll(state.repositoryListingJSON.repositories)  // what's missing?
 		if (oldListOfRepositories) {
 			logDebug "missingRepositories: $oldListOfRepositories"
 		  installedRepositories.removeAll(oldListOfRepositories.location)
 		  logInfo "A repository was removed, ${oldListOfRepositories.location}"
-		}
- 
+		} 
+
 		app.updateSetting("installedRepositories", installedRepositories)
 	}
-	
+
 	return addedRepositories
 }
 
@@ -3960,7 +3963,7 @@ def copyInstalledItemsToNewManifest(srcManifest, destManifest) {
 	def switchedToPackageVersion = false
 	if (srcManifest.version == null && destManifest.version != null)
 		switchedToPackageVersion = true
-		
+
 	for (app in srcInstalledApps) {
 		def destApp = destManifest.apps?.find { it -> it.id == app.id }
 		if (destApp && destApp.heID == null)
@@ -3970,7 +3973,7 @@ def copyInstalledItemsToNewManifest(srcManifest, destManifest) {
 			destApp.remove("betaVersion")
 		}
 	}
-	
+
 	for (driver in srcInstalledDrivers) {
 		def destDriver = destManifest.drivers?.find { it -> it.id == driver.id }
 		if (destDriver && destDriver.heID == null)
@@ -3980,10 +3983,10 @@ def copyInstalledItemsToNewManifest(srcManifest, destManifest) {
 			destDriver.remove("betaVersion")
 		}
 	}
-	
+
 	if (srcManifest.payPalUrl != null)
 		destManifest.payPalUrl = srcManifest.payPalUrl
-		
+
 	if (srcManifest.gitHubUrl != null)
 		destManifest.gitHubUrl = srcManifest.gitHubUrl
 }
@@ -4019,7 +4022,7 @@ def findMatchingAppOrDriver(installedList, item) {
 	def matchedItem = installedList.find { it -> it.title == item.name && it.namespace == item.namespace}
 	if (matchedItem != null)
 		return matchedItem
-	
+
 	if (item.alternateNames) {
 		for (altName in item.alternateNames) {
 			matchedItem = installedList.find { it -> it.title == altName.name && it.namespace == altName.namespace}
@@ -4068,7 +4071,7 @@ def logDebug(msg) {
 
 def logInfo(msg) {
 	if (settings?.txtEnable != false) {
-		log.info msg 
+		log.info msg
 	}
 }
 
@@ -4093,7 +4096,7 @@ def getDriverList() {
 	return result
 }
 
-def getFormat(type, myText=""){            // Modified from @Stephack Code   
+def getFormat(type, myText=""){            // Modified from @Stephack Code
 	if(type == "line") return "<hr style='background-color:#1A77C9; height: 1px; border: 0;'>"
 	if(type == "title") return "<h2 style='color:#1A77C9;font-weight: bold'>${myText}</h2>"
 }
@@ -4109,7 +4112,7 @@ def displayFooter(){
 	section() {
 		paragraph getFormat("line")
 		paragraph "<div style='color:#1A77C9;text-align:center;font-weight:small;font-size:11px;'>Hubitat Package Manager<br><a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url' target='_blank'><img src='https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg' border='0' alt='PayPal Logo'></a><br><br>Please consider donating. This app took a lot of work to make.<br>If you find it valuable, I'd certainly appreciate it!</div>"
-	}       
+	}
 }
 
 def hasTag(pkg, tag) {
@@ -4146,7 +4149,7 @@ def renderPackageButton(pkg, i) {
 		badges += '<i class="material-icons material-icons-outlined" title="Cloud" style="font-size: 14pt">cloud</i>'
 	if (hasTag(pkg, "LAN"))
 		badges += '<i class="material-icons material-icons-outlined" title="LAN" style="font-size: 14pt">wifi</i>'
-	href(name: "prefPkgInstallPackage${i}", title: "${pkg.name} by ${pkg.author}", required: false, page: "prefInstallChoices", description: pkg.description + " <div>"+nonIconTagsHtml(pkg) +"<div style='text-align: right;display: table-cell;width: 100%;'>" + badges + "</div></div>", params: [location: pkg.location, payPalUrl: pkg.payPalUrl]) 
+	href(name: "prefPkgInstallPackage${i}", title: "${pkg.name} by ${pkg.author}", required: false, page: "prefInstallChoices", description: pkg.description + " <div>"+nonIconTagsHtml(pkg) +"<div style='text-align: right;display: table-cell;width: 100%;'>" + badges + "</div></div>", params: [location: pkg.location, payPalUrl: pkg.payPalUrl])
 	if (pkg.installed)
 		disableHrefButton("prefPkgInstallPackage${i}")
 	else
@@ -4158,13 +4161,13 @@ def addCss() {
 		.hpmNoClick::before { content: ''; font-family: 'Material Icons'; transform: none !important }
 		.hpmClick::before { content: '' !important; font-family: 'Material Icons'; transform: none !important }
 		.hpmPill { display: inline-block; border: 1px solid #33b5e5; border-radius: 5px 5px; padding-left: 2px; padding-right: 2px; background-color: #33b5e5; color: white; margin-left: 2px; margin-right: 2px; }
-		
+
 	</style>"""
 }
 
 def disableHrefButton(name) {
 	paragraph """<script>
-		\$('button[name^="_action_href_${name}|"]').parent().css({'pointer-events': 'none'}); 
+		\$('button[name^="_action_href_${name}|"]').parent().css({'pointer-events': 'none'});
 		\$('button[name^="_action_href_${name}|"]').addClass('hpmNoClick');
 	</script>"""
 }
@@ -4176,7 +4179,7 @@ def styleHrefButton(name) {
 }
 
 def showHideNextButton(show) {
-	if(show) paragraph "<script>\$('button[name=\"_action_next\"]').show()</script>"  
+	if(show) paragraph "<script>\$('button[name=\"_action_next\"]').show()</script>"
 	else paragraph "<script>\$('button[name=\"_action_next\"]').hide()</script>"
 }
 
@@ -4200,7 +4203,7 @@ def performMigrations() {
 			}
 			for (pkg in fileContents.packages) {
 				if (state.manifests[pkg.location]) {
-					
+
 					if (fileContents.gitHubUrl != null)
 						state.manifests[pkg.location].gitHubUrl = fileContents.gitHubUrl
 					if (fileContents.payPalUrl != null)
@@ -4232,13 +4235,13 @@ def getAppList() {
 			Cookie: state.cookie
 		]
 	  ]
-	
+
 	def result = []
 	try {
-		httpGet(params) { resp ->     
+		httpGet(params) { resp ->
 			def matcherText = resp.data.text.replace("\n","").replace("\r","")
 			def matcher = matcherText.findAll(/(<tr class="app-row" data-app-id="[^<>]+">.*?<\/tr>)/).each {
-				def allFields = it.findAll(/(<td .*?<\/td>)/) // { match,f -> return f } 
+				def allFields = it.findAll(/(<td .*?<\/td>)/) // { match,f -> return f }
 				def id = it.find(/data-app-id="([^"]+)"/) { match,i -> return i.trim() }
 				def title = allFields[0].find(/title="([^"]+)/) { match,t -> return t.trim() }
 				def namespace = allFields[1].find(/>([^"]+)</) { match,ns -> return ns.trim() }
