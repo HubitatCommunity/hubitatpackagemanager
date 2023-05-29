@@ -1,15 +1,16 @@
-/***
- *  Hubitat Package Manager v1.8.9
-
+/**
+ *
+ *  Hubitat Package Manager v1.8.9a
+ *
  *  Copyright 2020 Dominick Meglio
-
- *    If you find this useful, donations are always appreciated
+ *
+ *    If you find this useful, donations are always appreciated 
  *    https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=7LBRPJRLJSDDN&source=url
-
-
-
+ *
+ *
+ *
  *    csteele v1.8.9     allow required: true as string also
- *                         fix for a ProBundle install
+ *                         fix for a ProBundle install (a)
  *    csteele v1.8.8     check for Null for Invalid Category & Tags
  *                         log.error changed to log.warn where the event was handled
  *                         detect/delete missing Repositories
@@ -823,9 +824,8 @@ def performInstallation() {
 	// All files downloaded, execute installs
 	for (bundleToInstall in requiredBundles) {					// required = true
 		def location = getItemDownloadLocation(bundleToInstall.value)
-		def primary = bundleToInstall.primary ?: false
 		setBackgroundStatusMessage("Installing ${bundleToInstall.value.name}") // from $location")
-		if (!installBundle(location, primary)) {
+		if (!installBundle(location, false)) {
 			state.manifests.remove(pkgInstall)
 			return rollback("Failed to install bundle ${bundleToInstall.value.name} using ${location}. Please notify the package developer.", false)
 		}
@@ -3949,7 +3949,7 @@ def updateRepositoryListing() {
 			logDebug "missingRepositories: $oldListOfRepositories"
 		  installedRepositories.removeAll(oldListOfRepositories.location)
 		  logInfo "A repository was removed, ${oldListOfRepositories.location}"
-		} 
+		}
 
 		app.updateSetting("installedRepositories", installedRepositories)
 	}
