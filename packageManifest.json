@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.8.9",
+	"version": "1.8.10",
 	"dateReleased": "2023-05-19",
-	"releaseNotes": "v1.8.9     allow required: true as string also\n.           fix for a ProBundle install\nv1.8.8     check for Null for Invalid Category & Tags\n  log.error changed to log.warn where the event was handled.\n   detect/delete missing Repositories.\nv1.8.7     fix to Update bundle. (birdslikewires)\nv1.8.6     Un-Match added.\n             moved Bundles before Apps/Drivers for Install and Repair.\n             included Bundles into modify.\n",
+	"releaseNotes": "v1.8.10    correct File where contents are HTML [installFile() & uninstallFile()]\n             fix for default installBundle()  (tomw)\nv1.8.9     allow required: true as string also\n.           fix for a ProBundle install\nv1.8.8     check for Null for Invalid Category & Tags\n  log.error changed to log.warn where the event was handled.\n   detect/delete missing Repositories.\n",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
