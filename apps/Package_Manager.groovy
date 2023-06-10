@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.8.9a
+ *  Hubitat Package Manager v1.8.10
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,8 @@
  *
  *
  *
+ *    csteele v1.8.10    correct File where contents are HTML [installFile() & uninstallFile()]
+ *                         fix for default installBundle()  (tomw)
  *    csteele v1.8.9     allow required: true as string also
  *                         fix for a ProBundle install (a)
  *    csteele v1.8.8     check for Null for Invalid Category & Tags
@@ -28,7 +30,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.8.9"  }
+	public static String version()      {  return "v1.8.10"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 
@@ -3625,8 +3627,8 @@ def installFile(id, fileName, contents) {
 				"Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryDtoO2QfPwfhTjOuS"
 			],
 			body: """------WebKitFormBoundaryDtoO2QfPwfhTjOuS
-Content-Disposition: form-data; name="uploadFile"; filename="${id}-${fileName}"
-Content-Type: text/plain
+Content-Disposition: form-data; name="uploadFile"; filename="${fileName}"
+Content-Type: text/html
 
 ${contents}
 
@@ -3661,7 +3663,7 @@ def uninstallFile(id, fileName) {
 				"Cookie": state.cookie
 			],
 			body: groovy.json.JsonOutput.toJson(
-				name: "${id}-${fileName}",
+				name: "${fileName}",
 				type: "file"
 			),
 			timeout: 300,
@@ -3679,7 +3681,7 @@ def uninstallFile(id, fileName) {
 }
 
 // Bundle Installation Methods
-def installBundle(bundleLocation, bundlePrimary) {
+def installBundle(bundleLocation, bundlePrimary=false) {
 	try
 	{
         def params = [
