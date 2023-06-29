@@ -262,6 +262,10 @@ def prefSettings(params) {
 					input "hpmUsername", "string", title: "Hub Security username", required: true
 					input "hpmPassword", "password", title: "Hub Security password", required: true
 				}
+
+				paragraph "If you have SSL (HTTPS) enabled on your hub, you must enable the option below. If you're not sure, leave the option disabled."
+				input "sslEnabled", "bool", title: "SSL (HTTPS) Enabled", submitOnChange: true
+
 				if (showInstall)
 					paragraph "Please click Done and restart the app to continue."
 			}
@@ -3224,7 +3228,7 @@ def isHubSecurityEnabled() {
 	def hubSecurityEnabled = false
 	httpGet(
 		[
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/hub/edit",
 			textParser: true,
 			ignoreSSLIssues: true
@@ -3244,7 +3248,7 @@ def login() {
 		{
 			httpPost(
 				[
-					uri: "http://127.0.0.1:8080",
+					uri: getBaseUrl(),
 					path: "/login",
 					query:
 					[
@@ -3286,7 +3290,7 @@ def installApp(appCode) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/app/save",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3323,7 +3327,7 @@ def upgradeApp(id,appCode) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/app/ajax/update",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3352,7 +3356,7 @@ def upgradeApp(id,appCode) {
 def uninstallApp(id) {
 	try {
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/app/edit/update",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3387,7 +3391,7 @@ def uninstallApp(id) {
 
 def enableOAuth(id) {
 	def params = [
-		uri: "http://127.0.0.1:8080",
+		uri: getBaseUrl(),
 		path: "/app/edit/update",
 		requestContentType: "application/x-www-form-urlencoded",
 		headers: [
@@ -3415,7 +3419,7 @@ def getAppSource(id) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/app/ajax/code",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3441,7 +3445,7 @@ def getAppSource(id) {
 
 def getAppVersion(id) {
 	def params = [
-		uri: "http://127.0.0.1:8080",
+		uri: getBaseUrl(),
 		path: "/app/ajax/code",
 		requestContentType: "application/x-www-form-urlencoded",
 		headers: [
@@ -3464,7 +3468,7 @@ def installDriver(driverCode) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/driver/save",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3500,7 +3504,7 @@ def upgradeDriver(id,appCode) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/driver/ajax/update",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3530,7 +3534,7 @@ def uninstallDriver(id) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/driver/editor/update",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3568,7 +3572,7 @@ def getDriverSource(id) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/driver/ajax/code",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
@@ -3594,7 +3598,7 @@ def getDriverSource(id) {
 
 def getDriverVersion(id) {
 	def params = [
-		uri: "http://127.0.0.1:8080",
+		uri: getBaseUrl(),
 		path: "/driver/ajax/code",
 		requestContentType: "application/x-www-form-urlencoded",
 		headers: [
@@ -3617,7 +3621,7 @@ def installFile(id, fileName, contents) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/hub/fileManager/upload",
 			query: [
 				"folder": "/"
@@ -3655,7 +3659,7 @@ def uninstallFile(id, fileName) {
 	try
 	{
 		def params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/hub/fileManager/delete",
 			contentType: "application/json",
 			requestContentType: "application/json",
@@ -3685,7 +3689,8 @@ def installBundle(bundleLocation, bundlePrimary=false) {
 	try
 	{
         def params = [
-            uri: "http://127.0.0.1:8080/bundle/uploadZipFromUrl",
+            uri: getBaseUrl(),
+			path: "/bundle/uploadZipFromUrl",
             headers: [
                 "Accept": '*/*', // */
                 "ContentType": 'text/plain; charset=utf-8',
@@ -3724,10 +3729,12 @@ def uninstallBundle(bundleName) {
     {
 	  def gIB = []
         def params = [
-    	      uri: "http://127.0.0.1:8080/bundle/list",
+    	      uri: getBaseUrl(),
+			  path: "/bundle/list",
     	      contentType: "text/html",
     	      textParser: true,
-    	      headers: ["Cookie": cookie]
+    	      headers: ["Cookie": cookie],
+              ignoreSSLIssues: true
     	  ]
 
     	  try {
@@ -3756,7 +3763,7 @@ def uninstallBundle(bundleName) {
 // let's delete the Bundle's HEid found above
 	try {
 		params = [
-			uri: "http://127.0.0.1:8080",
+			uri: getBaseUrl(),
 			path: "/bundle/delete/$HEid",
 			headers: [
 				"Cookie": state.cookie
@@ -4079,11 +4086,13 @@ def logInfo(msg) {
 
 def getDriverList() {
 	def params = [
-		uri: "http://127.0.0.1:8080/device/drivers",
+		uri: getBaseUrl(),
+		path: "/device/drivers",
 		headers: [
 			Cookie: state.cookie
-		]
-	  ]
+		],
+        ignoreSSLIssues: true
+	]
 	def result = []
 	try {
 		httpGet(params) { resp ->
@@ -4231,12 +4240,14 @@ def performMigrations() {
 // Thanks to gavincampbell for the code below!
 def getAppList() {
 	def params = [
-		uri: "http://127.0.0.1:8080/app/list",
+		uri: getBaseUrl(),
+		path: "/app/list",
 		textParser: true,
 		headers: [
 			Cookie: state.cookie
-		]
-	  ]
+		],
+        ignoreSSLIssues: true
+	]
 
 	def result = []
 	try {
@@ -4254,4 +4265,10 @@ def getAppList() {
 		log.error "Error retrieving installed apps: ${e}"
 	}
 	return result
+}
+
+def getBaseUrl() {
+	def scheme = sslEnabled ? "https" : "http"
+	def port = sslEnabled ? "8443" : "8080"
+	return "$scheme://127.0.0.1:$port"
 }
