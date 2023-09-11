@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.8.11",
-	"dateReleased": "2023-06-10",
-	"releaseNotes": "v1.8.11    merge of: Add support for hub SSL (HTTPS) from kevdliu PR \nv1.8.10    correct File where contents are HTML [installFile() & uninstallFile()]\n             fix for default installBundle()  (tomw)\nv1.8.9     allow required: true as string also\n.           fix for a ProBundle install\n",
+	"version": "1.9.0",
+	"dateReleased": "2023-09-11",
+	"releaseNotes": "v1.9.0  Install 'location:' can't be empty.\n      add color to download icon \n      take advantage of endpoint for app code list in v2.3.6 \nv1.8.11    merge of: Add support for hub SSL (HTTPS) from kevdliu PR \nv1.8.10    correct File where contents are HTML [installFile() & uninstallFile()]\n             fix for default installBundle()  (tomw)\n",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
