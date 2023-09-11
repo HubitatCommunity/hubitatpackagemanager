@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.8.11
+ *  Hubitat Package Manager v1.8.12
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,9 @@
  *
  *
  *
+ *    csteele v1.9.0    Install 'location:' can't be empty.
+ *                         add color to download icon 
+ *                         take advantage of endpoint for app code list in v2.3.6 
  *    csteele v1.8.11    merge of: Add support for hub SSL (HTTPS) from kevdliu PR 
  *    csteele v1.8.10    correct File where contents are HTML [installFile() & uninstallFile()]
  *                         fix for default installBundle()  (tomw)
@@ -31,7 +34,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.8.11"  }
+	public static String version()      {  return "v1.9.0"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -4160,20 +4163,30 @@ def renderPackageButton(pkg, i) {
 		badges += '<i class="material-icons material-icons-outlined" title="Cloud" style="font-size: 14pt">cloud</i>'
 	if (hasTag(pkg, "LAN"))
 		badges += '<i class="material-icons material-icons-outlined" title="LAN" style="font-size: 14pt">wifi</i>'
-	href(name: "prefPkgInstallPackage${i}", title: "${pkg.name} by ${pkg.author}", required: false, page: "prefInstallChoices", description: pkg.description + " <div>"+nonIconTagsHtml(pkg) +"<div style='text-align: right;display: table-cell;width: 100%;'>" + badges + "</div></div>", params: [location: pkg.location, payPalUrl: pkg.payPalUrl])
+	if (pkg.location != '')
+		href(name: "prefPkgInstallPackage${i}", title: "${pkg.name} by ${pkg.author}", required: false, page: "prefInstallChoices", description: pkg.description + " <div>"+nonIconTagsHtml(pkg) +"<div style='text-align: right;display: table-cell;width: 100%;'>" + badges + "</div></div>", params: [location: pkg.location, payPalUrl: pkg.payPalUrl])
 	if (pkg.installed)
 		disableHrefButton("prefPkgInstallPackage${i}")
+	else if (pkg.location == '')
+		brokenHrefButton("prefPkgInstallPackage${i}")
 	else
 		styleHrefButton("prefPkgInstallPackage${i}")
 }
 
 def addCss() {
 	paragraph """<style>
-		.hpmNoClick::before { content: ''; font-family: 'Material Icons'; transform: none !important }
-		.hpmClick::before { content: '' !important; font-family: 'Material Icons'; transform: none !important }
-		.hpmPill { display: inline-block; border: 1px solid #33b5e5; border-radius: 5px 5px; padding-left: 2px; padding-right: 2px; background-color: #33b5e5; color: white; margin-left: 2px; margin-right: 2px; }
-
+		.hpmBroken::before { content: 'close' !important; font-family: 'Material Icons'; transform: none !important; color: crimson }
+		.hpmNoClick::before { content: 'check_box'; font-family: 'Material Icons'; transform: none !important; color: navy }
+		.hpmClick::before { content: 'file_download' !important; font-family: 'Material Icons'; transform: none !important; color: green }
+		.hpmPill { display: inline-block; border: 1px solid #33b5e5; border-radius: 5px 5px; padding-left: 2px; padding-right: 2px; background-color: #33b5e5; color: white; margin-left: 2px; margin-right: 2px; }	
 	</style>"""
+}
+
+def brokenHrefButton(name) {
+	paragraph """<script>
+		\$('button[name^="_action_href_${name}|"]').parent().css({'pointer-events': 'none'});
+		\$('button[name^="_action_href_${name}|"]').addClass('hpmBroken');
+	</script>"""
 }
 
 def disableHrefButton(name) {
@@ -4237,34 +4250,59 @@ def performMigrations() {
 	}
 }
 
-// Thanks to gavincampbell for the code below!
 def getAppList() {
-	def params = [
-		uri: getBaseUrl(),
-		path: "/app/list",
-		textParser: true,
-		headers: [
-			Cookie: state.cookie
-		],
-	  ignoreSSLIssues: true
-	  ]
-
 	def result = []
-	try {
-		httpGet(params) { resp ->
-			def matcherText = resp.data.text.replace("\n","").replace("\r","")
-			def matcher = matcherText.findAll(/(<tr class="app-row" data-app-id="[^<>]+">.*?<\/tr>)/).each {
-				def allFields = it.findAll(/(<td .*?<\/td>)/) // { match,f -> return f }
-				def id = it.find(/data-app-id="([^"]+)"/) { match,i -> return i.trim() }
-				def title = allFields[0].find(/title="([^"]+)/) { match,t -> return t.trim() }
-				def namespace = allFields[1].find(/>([^"]+)</) { match,ns -> return ns.trim() }
-				result += [id:id,title:title,namespace:namespace]
+	if (location.hub.firmwareVersionString >= "2.3.6.126") {
+		def params = [
+			uri: getBaseUrl(),
+			path: "/hub2/userAppTypes",
+			headers: [
+				Cookie: state.cookie
+			],
+		    ignoreSSLIssues: true
+		    ]
+
+		try {
+			httpGet(params) { resp ->
+				resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace]} 
+			}				
+
+		} catch (e) {
+			log.error "Error retrieving installed apps: ${e}"
+		} 
+
+	} else {
+// Thanks to gavincampbell for the code below!
+		def params = [
+			uri: getBaseUrl(),
+			path: "/app/list",
+			textParser: true,
+			headers: [
+				Cookie: state.cookie
+			],
+		  ignoreSSLIssues: true
+		]
+
+		try {
+			httpGet(params) { resp ->
+				def matcherText = resp.data.text.replace("\n","").replace("\r","")
+				def matcher = matcherText.findAll(/(<tr class="app-row" data-app-id="[^<>]+">.*?<\/tr>)/).each {
+					def allFields = it.findAll(/(<td .*?<\/td>)/) // { match,f -> return f }
+					def id = it.find(/data-app-id="([^"]+)"/) { match,i -> return i.trim() }
+					def title = allFields[0].find(/title="([^"]+)/) { match,t -> return t.trim() }
+					def namespace = allFields[1].find(/>([^"]+)</) { match,ns -> return ns.trim() }
+					result += [id:id,title:title,namespace:namespace]
+				}
 			}
-		}
-	} catch (e) {
-		log.error "Error retrieving installed apps: ${e}"
+
+		} catch (e) {
+			log.error "Error retrieving installed apps: ${e}"
+		} 
+
 	}
 	return result
+
+
 }
 
 def getBaseUrl() {
