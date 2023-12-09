@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.0
+ *  Hubitat Package Manager v1.9.1
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,12 @@
  *
  *
  *
+ *    csteele v1.9.1    updatePackage() ignores blank app or driver definitions
+ *                         Take advantage of endpoints in v2.3.7 for app and driver uninstall 
+ *                         take advantage of endpoint for driver code list in v2.3.6 
+ *                         clarify "failed download" error message with App or Driver hint
+ *                         change updateTime to be NOT the 00 second
+ *                         extended installBundle() timeout to 5 min (300 seconds)
  *    csteele v1.9.0    Install 'location:' can't be empty.
  *                         add color to download icon 
  *                         take advantage of endpoint for app code list in v2.3.6 
@@ -34,7 +40,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.0"  }
+	public static String version()      {  return "v1.9.1"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -135,7 +141,7 @@ def initialize() {
 		timeOfDayForUpdateChecks = timeToday("00:00")
 	else
 		timeOfDayForUpdateChecks = timeToday(updateCheckTime, location.timeZone)
-	schedule("00 ${timeOfDayForUpdateChecks.minutes} ${timeOfDayForUpdateChecks.hours} ? * *", checkForUpdates)
+	schedule("13 ${timeOfDayForUpdateChecks.minutes} ${timeOfDayForUpdateChecks.hours} ? * *", checkForUpdates)
 
 	performMigrations()
 }
@@ -378,7 +384,7 @@ def prefInstallRepositorySearch() {
 	if (settings?.srchMethod != false) {
 		srchSrcTxt = "Fast"
 		searchApiUrl = searchFastApiUrl
-	}
+	} 
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader()
@@ -787,7 +793,7 @@ def performInstallation() {
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
 			state.manifests.remove(pkgInstall)
-			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
+			return triggerError("Failed download of required app file", "An error occurred downloading ${location}", false)
 		}
 		appFiles[location] = fileContents
 	}
@@ -799,7 +805,7 @@ def performInstallation() {
 			def fileContents = downloadFile(location)
 			if (fileContents == null) {
 				state.manifests.remove(pkgInstall)
-				return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
+				return triggerError("Failed download of app file", "An error occurred downloading ${location}", false)
 			}
 			appFiles[location] = fileContents
 		}
@@ -810,7 +816,7 @@ def performInstallation() {
 		def fileContents = downloadFile(location)
 		if (fileContents == null) {
 			state.manifests.remove(pkgInstall)
-			return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
+			return triggerError("Failed download of required driver file", "An error occurred downloading ${location}", false)
 		}
 		driverFiles[location] = fileContents
 	}
@@ -823,7 +829,7 @@ def performInstallation() {
 			def fileContents = downloadFile(location)
 			if (fileContents == null) {
 				state.manifests.remove(pkgInstall)
-				return triggerError("Failed download of file", "An error occurred downloading ${location}", false)
+				return triggerError("Failed download of driver file", "An error occurred downloading ${location}", false)
 			}
 			driverFiles[location] = fileContents
 		}
@@ -1668,30 +1674,32 @@ def performUpdateCheck() {
 				def appOrDriverNeedsUpdate = false
 				for (app in manifest.apps) {
 					try {
-						def installedApp = getAppById(state.manifests[pkg.key], app.id)
-						if (app?.version != null && installedApp?.version != null) {
-							newVersionResult = newVersionAvailable(app, installedApp)
-							if (newVersionResult.newVersion) {
+						if (app.id) {  // skip if an app is not actually defined
+							def installedApp = getAppById(state.manifests[pkg.key], app.id)
+							if (app?.version != null && installedApp?.version != null) {
+								newVersionResult = newVersionAvailable(app, installedApp)
+								if (newVersionResult.newVersion) {
+									if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
+										packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
+									}
+									appOrDriverNeedsUpdate = true
+									addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "specificapp", app, newVersionResult.forceProduction)
+								}
+							}
+							else if ((!installedApp || (!installedApp.required && installedApp.heID == null)) && app.required) {
 								if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
-									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
+									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new requirement)"]
 								}
 								appOrDriverNeedsUpdate = true
-								addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "specificapp", app, newVersionResult.forceProduction)
+								addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "reqapp", app, false)
 							}
-						}
-						else if ((!installedApp || (!installedApp.required && installedApp.heID == null)) && app.required) {
-							if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
-								packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new requirement)"]
+							else if (!installedApp && !app.required) {
+								if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
+									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (new optional app or driver is available)"]
+								}
+								appOrDriverNeedsUpdate = true
+								addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "optapp", app, false)
 							}
-							appOrDriverNeedsUpdate = true
-							addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "reqapp", app, false)
-						}
-						else if (!installedApp && !app.required) {
-							if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
-								packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (new optional app or driver is available)"]
-							}
-							appOrDriverNeedsUpdate = true
-							addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "optapp", app, false)
 						}
 					}
 					catch (any) {
@@ -1700,30 +1708,32 @@ def performUpdateCheck() {
 				}
 				for (driver in manifest.drivers) {
 					try {
-						def installedDriver = getDriverById(state.manifests[pkg.key], driver.id)
-						if (driver?.version != null && installedDriver?.version != null) {
-							newVersionResult = newVersionAvailable(driver, installedDriver)
-							if (newVersionResult.newVersion) {
-								if (!appOrDriverNeedsUpdate) {// Only add a package to the list once
-									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
+						if (driver.id) {  // skip if a driver is not actually defined
+							def installedDriver = getDriverById(state.manifests[pkg.key], driver.id)
+							if (driver?.version != null && installedDriver?.version != null) {
+								newVersionResult = newVersionAvailable(driver, installedDriver)
+								if (newVersionResult.newVersion) {
+									if (!appOrDriverNeedsUpdate) {// Only add a package to the list once
+										packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
+									}
+									appOrDriverNeedsUpdate = true
+									addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "specificdriver", driver, newVersionResult.forceProduction)
+								}
+							}
+							else if ((!installedDriver || (!installedDriver.required && installedDriver.heID == null)) && driver.required) {
+								if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
+									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new requirement)"]
 								}
 								appOrDriverNeedsUpdate = true
-								addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "specificdriver", driver, newVersionResult.forceProduction)
+								addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "reqdriver", driver, false)
 							}
-						}
-						else if ((!installedDriver || (!installedDriver.required && installedDriver.heID == null)) && driver.required) {
-							if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
-								packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new requirement)"]
+							else if (!installedDriver && !driver.required) {
+								addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "optdriver", driver, false)
+								if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
+									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (new optional app or driver is available)"]
+								}
+								appOrDriverNeedsUpdate = true
 							}
-							appOrDriverNeedsUpdate = true
-							addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "reqdriver", driver, false)
-						}
-						else if (!installedDriver && !driver.required) {
-							addUpdateDetails(pkg.key, manifest.packageName, manifest.releaseNotes, "optdriver", driver, false)
-							if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
-								packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (new optional app or driver is available)"]
-							}
-							appOrDriverNeedsUpdate = true
 						}
 					}
 					catch (e) {
@@ -3357,38 +3367,62 @@ def upgradeApp(id,appCode) {
 }
 
 def uninstallApp(id) {
-	try {
-		def params = [
-			uri: getBaseUrl(),
-			path: "/app/edit/update",
-			requestContentType: "application/x-www-form-urlencoded",
-			headers: [
-				"Cookie": state.cookie
-			],
-			body: [
-				id: id,
-				"_action_delete": "Delete"
-			],
-			timeout: 300,
-			textParser: true,
-			ignoreSSLIssues: true
-		]
-		def result = true
-		httpPost(params) { resp ->
-			if (resp.data == null)
-				result = true
-			else {
-				def matcherText = resp.data.text.replace("\n","").replace("\r","")
-				def matcher = matcherText.find(/<div class="alert-close close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;<\/span><\/div>(.+?)<\/div>/)
-				if (matcher)
-					result = false
+	if (location.hub.firmwareVersionString >= "2.3.7.130") {
+		try {
+			def params = [
+				uri: getBaseUrl(),
+				path: "/app/edit/deleteJson/$id", 
+				headers: [
+					"Cookie": state.cookie
+				],
+				timeout: 300,
+				ignoreSSLIssues: true
+			]
+            result = false
+ 			httpGet(params) { resp ->
+				if (resp.data.status == true) result = true
 			}
+			return result
 		}
-		return result
-	}
-	catch (e) {
-		log.error "Error uninstalling app ${e}"
-		return false
+		catch (e) {
+			log.error "Error uninstalling app ${e}"
+			return false
+		}
+	
+	} else {
+		try {
+			def params = [
+				uri: getBaseUrl(),
+				path: "/app/edit/update",
+				requestContentType: "application/x-www-form-urlencoded",
+				headers: [
+					"Cookie": state.cookie
+				],
+				body: [
+					id: id,
+					"_action_delete": "Delete"
+				],
+				timeout: 300,
+				textParser: true,
+				ignoreSSLIssues: true
+			]
+			def result = true
+			httpPost(params) { resp ->
+				if (resp.data == null)
+					result = true
+				else {
+					def matcherText = resp.data.text.replace("\n","").replace("\r","")
+					def matcher = matcherText.find(/<div class="alert-close close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;<\/span><\/div>(.+?)<\/div>/)
+					if (matcher)
+						result = false
+				}
+			}
+			return result
+		}
+		catch (e) {
+			log.error "Error uninstalling app ${e}"
+			return false
+		}
 	}
 }
 
@@ -3534,40 +3568,63 @@ def upgradeDriver(id,appCode) {
 }
 
 def uninstallDriver(id) {
-	try
-	{
-		def params = [
-			uri: getBaseUrl(),
-			path: "/driver/editor/update",
-			requestContentType: "application/x-www-form-urlencoded",
-			headers: [
-				"Cookie": state.cookie
-			],
-			body: [
-				id: id,
-				"_action_delete": "Delete"
-			],
-			timeout: 300,
-			textParser: true,
-			ignoreSSLIssues: true
-		]
-		def result = true
-		httpPost(params) { resp ->
-			if (resp.data == null)
-				result = true
-			else {
-				def matcherText = resp.data.text.replace("\n","").replace("\r","")
-				def matcher = matcherText.find(/<div class="alert-close close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;<\/span><\/div>(.+?)<\/div>/)
-				if (matcher)
-					result = false
+	if (location.hub.firmwareVersionString >= "2.3.7.130") {
+		try {
+			def params = [
+				uri: getBaseUrl(),
+				path: "/driver/editor/deleteJson/$id", 
+				headers: [
+					"Cookie": state.cookie
+				],
+				timeout: 300,
+				ignoreSSLIssues: true
+			]
+			result = false
+ 			httpGet(params) { resp ->
+				if (resp.data.status == true) result = true
 			}
+			return result
 		}
-		return result
-	}
-	catch (e)
-	{
-		log.error "Error uninstalling driver: ${e}"
-		return false
+		catch (e) {
+			log.error "Error uninstalling app ${e}"
+			return false
+		}
+	
+	} else {
+		try {
+			def params = [
+				uri: getBaseUrl(),
+				path: "/driver/editor/update",
+				requestContentType: "application/x-www-form-urlencoded",
+				headers: [
+					"Cookie": state.cookie
+				],
+				body: [
+					id: id,
+					"_action_delete": "Delete"
+				],
+				timeout: 300,
+				textParser: true,
+				ignoreSSLIssues: true
+			]
+			def result = true
+			httpPost(params) { resp ->
+				if (resp.data == null)
+					result = true
+				else {
+					def matcherText = resp.data.text.replace("\n","").replace("\r","")
+					def matcher = matcherText.find(/<div class="alert-close close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;<\/span><\/div>(.+?)<\/div>/)
+					if (matcher)
+						result = false
+				}
+			}
+			return result
+		}
+		catch (e)
+		{
+			log.error "Error uninstalling driver: ${e}"
+			return false
+		}
 	}
 }
 
@@ -3704,7 +3761,7 @@ def installBundle(bundleLocation, bundlePrimary=false) {
 			installer: bundlePrimary,
 			pwd: ""
 		),
-            timeout: 90,
+            timeout: 300,
             ignoreSSLIssues: true
         ]
 		httpPost(params) { resp ->
@@ -4088,24 +4145,46 @@ def logInfo(msg) {
 }
 
 def getDriverList() {
-	def params = [
-		uri: getBaseUrl(),
-		path: "/device/drivers",
-		headers: [
-			Cookie: state.cookie
-		],
-	  ignoreSSLIssues: true
-	  ]
 	def result = []
-	try {
-		httpGet(params) { resp ->
-			for (driver in resp.data.drivers) {
-				if (driver.type == "usr")
-					result += [id:driver.id.toString(),title:driver.name,namespace:driver.namespace]
+	if (location.hub.firmwareVersionString >= "2.3.6.126") {
+		def params = [
+			uri: getBaseUrl(),
+			path: "/hub2/userDeviceTypes",
+			headers: [
+				Cookie: state.cookie
+			],
+		  ignoreSSLIssues: true
+		  ]
+
+		try {
+			httpGet(params) { resp ->
+			resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace]} 
 			}
+		} catch (e) {
+			log.error "Error retrieving installed drivers: ${e}"
 		}
-	} catch (e) {
-		log.error "Error retrieving installed drivers: ${e}"
+
+	} else {
+	
+		def params = [
+			uri: getBaseUrl(),
+			path: "/device/drivers",
+			headers: [
+				Cookie: state.cookie
+			],
+		  ignoreSSLIssues: true
+		  ]
+
+		try {
+			httpGet(params) { resp ->
+				for (driver in resp.data.drivers) {
+					if (driver.type == "usr")
+						result += [id:driver.id.toString(),title:driver.name,namespace:driver.namespace]
+				}
+			}
+		} catch (e) {
+			log.error "Error retrieving installed drivers: ${e}"
+		}
 	}
 	return result
 }
@@ -4301,8 +4380,6 @@ def getAppList() {
 
 	}
 	return result
-
-
 }
 
 def getBaseUrl() {
