@@ -6,7 +6,7 @@ The Hubitat Package Manager provides tools to install, uninstall, and upgrade 3r
 ## Initial Configuration
 If you use Hub Security you will need to provide the admin username and password of your hub. If you do not, simply turn the toggle off.
 
-![Initial Setup Screen](https://github.com/HubitatCommunity/hubitat-packagemanager/blob/master/imgs/MainPage1.PNG)
+![Initial Setup Screen](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/MainPage1.PNG)
 
 The app will then perform a _Match Up_. This will automatically search all of the apps and drivers you have installed and compare it to a list of those that have packages. If a match is found, the package manager will begin monitoring that package for updates.
 
