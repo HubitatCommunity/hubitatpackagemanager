@@ -13,7 +13,7 @@ The app will then perform a _Match Up_. This will automatically search all of th
 ## Installing a Package
 There are three ways to install a package. You can _Search by Keywords_, _Browse by Tags_, or if you know the URL of a package you can choose _From a URL_
 
-![Install Options Screen](https://github.com/HubitatCommunity/hubitat-packagemanager/raw/master/imgs/Install1.PNG)
+![Install Options Screen](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Install1.PNG)
 
 If you choose to _Search by Keywords_, you will get a textbox where you can enter your search query. When you click _Next_ you will see all matching packages.
 
@@ -23,33 +23,33 @@ If you chose to enter a URL you will be prompted to enter the URL. _This is not 
 
 If the package includes any optional apps or drivers you will be prompted to choose which ones you'd like to install. If you need to change your decision later you can always return and perform a _Modify_ which will let you change the optional parameters.
 
-![Install Optional Addons](https://github.com/HubitatCommunity/hubitat-packagemanager/raw/master/imgs/Install2.PNG)
+![Install Optional Addons](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Install2.PNG)
 
 After you make your decisions you'll be prompted to confirm by clicking _Next_. Once you do the package will be installed.
 
 ## Modifying a Package
 If you need to add or remove an optional component from a package later, choose the _Modify_ option. You will be asked to choose which package you'd like to modify.
 
-![Modify Optional Addons](https://github.com/HubitatCommunity/hubitat-packagemanager/raw/master/imgs/Modify1.PNG)
+![Modify Optional Addons](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Modify1.PNG)
 
 Choose the components to add and/or remove. You will then be asked to confirm before the changes are made. Click _Next_ to complete the changes.
 
 ## Repairing a Package
 If you accidentally manually uninstall an app or driver that is part of a package, or if an update goes wrong for some reason, use a repair to fix the package. Simply specify the package to repair. Click _Next_ to reinstall the package. Note that this will also update it to the latest version.
 
-![Modify Optional Addons](https://github.com/HubitatCommunity/hubitat-packagemanager/raw/master/imgs/Repair1.PNG)
+![Modify Optional Addons](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Repair1.PNG)
 
 Choose the components to add and/or remove. You will then be asked to confirm before the changes are made. Click _Next_ to complete the changes.
 
 ## Uninstalling a Package
 If you'd like to uninstall a package, choose the _Uninstall_ option. Choose the package to uninstall and click _Next_. You will then be prompted to confirm the components that are to be removed. Note, this option cannot be undone. If you would like the package to be reinstalled you must do so by running an _Install_ and you will have to reconfigure all of your settings again.
 
-![Uninstall Package](https://github.com/HubitatCommunity/hubitat-packagemanager/raw/master/imgs/Uninstall1.PNG)
+![Uninstall Package](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Uninstall1.PNG)
 
 ## Updating Packages
 When an author releases a new version of a package, to install it, choose the _Update_ option. If updates are available, choose the packages you wish to update and then click _Next_. You will then be able to confirm your selections and install the updates by clicking _Next_.
 
-![Update Package](https://github.com/HubitatCommunity/hubitat-packagemanager/raw/master/imgs/Update1.PNG)
+![Update Package](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Update1.PNG)
 
 ## Match Up
 A Match Up will search through all of the apps and drivers you have installed on your hub and attempt to figure out if there are packages available that match these apps and drivers. This isn't an exact science. The Hubitat Package Manager will show you matches it found and allow you to confirm those that appear to be correct. This will then cause the selected apps and drivers to be monitored for updates. Unfortunately, the package manager has no way to know what version of a previously installed app or driver was installed. You have two options. You can either tell the package manager to assume that the version you have installed is up to date, or not. If it is set to assume it is up to date, you will not receive update notifications until the next time a new version is available. If it is set to not be up to date, you can immediately perform an _Update_ which will ensure the latest version is installed.
