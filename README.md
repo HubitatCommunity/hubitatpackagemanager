@@ -70,7 +70,7 @@ The updates include several options. You can configure when the update checker r
 ![Package Manager Settings](https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/imgs/Settings2.PNG)
 
 ## Developer Information
-The information below is intended for app and driver developers who wish to use Hubitat Package Manager to provide your apps and drivers. Two things are needed, each package must provide a _manifest_ and you must provide a _repository_ that lists your packages. A small little tool called [Hubitat Package Manager Tools](https://github.com/HubitatCommunity/hubitat-packagemanagertools/releases) has been provided which assists in the creation of these files. On Windows simply run the `hpm.exe --help` to get help, and on MacOS and Linux run `./hpm --help`
+The information below is intended for app and driver developers who wish to use Hubitat Package Manager to provide your apps and drivers. Two things are needed, each package must provide a _manifest_ and you must provide a _repository_ that lists your packages. A small little tool called [Hubitat Package Manager Tools](https://github.com/dcmeglio/hubitat-packagemanagertools/releases) has been provided which assists in the creation of these files. On Windows simply run the `hpm.exe --help` to get help, and on MacOS and Linux run `./hpm --help`
 
 ### Package Manifest 
 The package manifest is a JSON file that lists the apps and drivers that are part of your package. A recommendation when versioning your packages is to use [SemVer](https://semver.org/). This will ensure that the Hubitat Package Manager is always able to detect updates properly. You can either version the entire package as a whole, or each app/driver can be versioned, but don't mix-and-match within the same package.
@@ -121,7 +121,7 @@ The package manifest is a JSON file that lists the apps and drivers that are par
 	hpm manifest-add-driver packageManifest.json --location=https://raw.githubusercontent.com/driver2.groovy --required=false
 
 ### Repository File
-The repository file is another JSON file that can be created using the [Hubitat Package Manager Tools](https://github.com/HubitatCommunity/hubitat-packagemanagertools/releases). This lets you list all of the packages you have available in your repository. When assigning a category to your packages please reference the list below.
+The repository file is another JSON file that can be created using the [Hubitat Package Manager Tools](https://github.com/dcmeglio/hubitat-packagemanagertools/releases). This lets you list all of the packages you have available in your repository. When assigning a category to your packages please reference the list below.
 
 #### Categories & Tags
 Categories are being phased out in favor of tags. A complete list of categories and tags can be viewed at https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/settings.json If you need additional tags because the existing ones don't cover your use, submit a PR against this file.
