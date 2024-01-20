@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.9.1",
-	"dateReleased": "2023-12-09",
-	"releaseNotes": "v1.9.1    updatePackage() ignores blank app or driver definitions\n          Take advantage of endpoints in v2.3.7 for app and driver uninstall\n          take advantage of endpoint for driver code list in v2.3.6 \nv1.9.0   Install 'location:' can't be empty.\n         add color to download icon \n         take advantage of endpoint for app code list in v2.3.6 \nv1.8.11  merge of: Add support for hub SSL (HTTPS) from kevdliu PR \nv1.8.10  correct File where contents are HTML [installFile() & uninstallFile()]\n         fix for default installBundle()  (tomw)\n",
+	"version": "1.9.2",
+	"dateReleased": "2024/01/20",
+	"releaseNotes": "v1.9.2    added "Connection": 'keep-alive' to install/uninstall Apps, Drivers and Bundles\n             extended timeout to 7 min (420 seconds)\n             Take advantage of v2.3.8 Bundle install/uninstall \nv1.9.1    updatePackage() ignores blank app or driver definitions\n          Take advantage of endpoints in v2.3.7 for app and driver uninstall\n          take advantage of endpoint for driver code list in v2.3.6 \nv1.9.0   Install 'location:' can't be empty.\n         add color to download icon \n         take advantage of endpoint for app code list in v2.3.6 \n",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
