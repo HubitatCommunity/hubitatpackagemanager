@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.1
+ *  Hubitat Package Manager v1.9.2
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,9 @@
  *
  *
  *
+ *    csteele v1.9.2    added "Connection": 'keep-alive' to install/uninstall Apps, Drivers and Bundles
+ *                         extended timeout to 7 min (420 seconds) 
+ *                         Take advantage of v2.3.8 Bundle install/uninstall 
  *    csteele v1.9.1    updatePackage() ignores blank app or driver definitions
  *                         Take advantage of endpoints in v2.3.7 for app and driver uninstall 
  *                         take advantage of endpoint for driver code list in v2.3.6 
@@ -40,7 +43,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.1"  }
+	public static String version()      {  return "v1.9.2"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -521,11 +524,11 @@ def renderTags(pkgList) {
 		}
 		else
 			if (pkg.category?.trim()) { log.warn "Invalid category found: ${pkg.category} for ${pkg.location}" }
-		for (tag in pkg.tags) {
-			if (state.categoriesAndTags.tags.contains(tag)) {
-				if (!tags.contains(tag))
-					tags << tag
-			}
+			for (tag in pkg.tags) {
+				if (state.categoriesAndTags.tags.contains(tag)) {
+					if (!tags.contains(tag))
+						tags << tag
+				}
 			else
 				if (tag?.trim()) { log.warn "Invalid tag found: ${tag} for ${pkg.location}" }
 		}
@@ -3307,6 +3310,7 @@ def installApp(appCode) {
 			path: "/app/save",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
+				"Connection": 'keep-alive',
 				"Cookie": state.cookie
 			],
 			body: [
@@ -3315,7 +3319,7 @@ def installApp(appCode) {
 				create: "",
 				source: appCode
 			],
-			timeout: 300,
+			timeout: 420,
 			ignoreSSLIssues: true
 		]
 		def result
@@ -3344,6 +3348,7 @@ def upgradeApp(id,appCode) {
 			path: "/app/ajax/update",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
+				"Connection": 'keep-alive',
 				"Cookie": state.cookie
 			],
 			body: [
@@ -3351,7 +3356,7 @@ def upgradeApp(id,appCode) {
 				version: getAppVersion(id),
 				source: appCode
 			],
-			timeout: 300,
+			timeout: 420,
 			ignoreSSLIssues: true
 		]
 		def result = false
@@ -3509,6 +3514,7 @@ def installDriver(driverCode) {
 			path: "/driver/save",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
+	        		"Connection": 'keep-alive',
 				"Cookie": state.cookie
 			],
 			body: [
@@ -3517,7 +3523,7 @@ def installDriver(driverCode) {
 				create: "",
 				source: driverCode
 			],
-			timeout: 300,
+			timeout: 420,
 			ignoreSSLIssues: true
 		]
 		def result
@@ -3545,6 +3551,7 @@ def upgradeDriver(id,appCode) {
 			path: "/driver/ajax/update",
 			requestContentType: "application/x-www-form-urlencoded",
 			headers: [
+	    			"Connection": 'keep-alive',
 				"Cookie": state.cookie
 			],
 			body: [
@@ -3552,7 +3559,7 @@ def upgradeDriver(id,appCode) {
 				version: getDriverVersion(id),
 				source: appCode
 			],
-			timeout: 300,
+			timeout: 420,
 			ignoreSSLIssues: true
 		]
 		def result = false
@@ -3746,33 +3753,58 @@ def uninstallFile(id, fileName) {
 
 // Bundle Installation Methods
 def installBundle(bundleLocation, bundlePrimary=false) {
-	try
-	{
-        def params = [
-            uri: getBaseUrl(),
-            path: "/bundle/uploadZipFromUrl",
-            headers: [
-                "Accept": '*/*', // */
-                "ContentType": 'text/plain; charset=utf-8',
-                "Cookie": state.cookie
-            ],
- 		body: groovy.json.JsonOutput.toJson(
-			url: bundleLocation,
-			installer: bundlePrimary,
-			pwd: ""
-		),
-            timeout: 300,
-            ignoreSSLIssues: true
-        ]
-		httpPost(params) { resp ->
+	if (location.hub.firmwareVersionString >= "2.3.8.108") {
+		try
+		{
+			def params = [
+				uri: "${getBaseUrl()}/bundle2/uploadZipFromUrl?url=${URLEncoder.encode(bundleLocation, "UTF-8")}&pwd=&private=$bundlePrimary",
+	 			headers: [
+					"Connection": 'keep-alive',
+					"Cookie": state.cookie
+				],
+	 			timeout: 300,
+				ignoreSSLIssues: true
+			]
+			httpGet(params) { resp ->
+				result = resp.data.success
+			}
+			return result
+		}
+		catch (e) {
+			log.error "Error installing bundle: ${e}"
+		}
+		return false
 
-        }
-		return true
+	} else {
+		try
+		{
+      	  def params = [
+      	      uri: getBaseUrl(),
+      	      path: "/bundle/uploadZipFromUrl",
+      	      headers: [
+      	          "Accept": '*/*', // */
+      	          "ContentType": 'text/plain; charset=utf-8',
+			    "Connection": 'keep-alive',
+      	          "Cookie": state.cookie
+      	      ],
+ 			body: groovy.json.JsonOutput.toJson(
+				url: bundleLocation,
+				installer: bundlePrimary,
+				pwd: ""
+			),
+      	      timeout: 420,
+      	      ignoreSSLIssues: true
+      	  ]
+			httpPost(params) { resp ->
+	
+      	  }
+			return true
+		}
+		catch (e) {
+			log.error "Error installing bundle: ${e}"
+		}
+		return false
 	}
-	catch (e) {
-		log.error "Error installing bundle: ${e}"
-	}
-	return false
 }
 
 
@@ -3793,7 +3825,10 @@ def uninstallBundle(bundleName) {
     	      path: "/bundle/list",
     	      contentType: "text/html",
     	      textParser: true,
-    	      headers: ["Cookie": cookie],
+    	      headers: [
+	        "Connection": 'keep-alive',
+	        "Cookie": cookie
+    	      ],
     	      ignoreSSLIssues: true
     	  ]
 
@@ -3821,25 +3856,51 @@ def uninstallBundle(bundleName) {
     }
 
 // let's delete the Bundle's HEid found above
-	try {
-		params = [
-			uri: getBaseUrl(),
-			path: "/bundle/delete/$HEid",
-			headers: [
-				"Cookie": state.cookie
-			],
-			timeout: 300,
-			ignoreSSLIssues: true
-		]
-		httpGet(params) { resp ->
-
+    if (location.hub.firmwareVersionString >= "2.3.8.108") {
+		try {
+			def params = [
+				uri: "${getBaseUrl()}/bundle/deleteJson/$HEid?full=true",
+	 			headers: [
+					"Connection": 'keep-alive',
+					"Cookie": state.cookie
+				],
+				timeout: 300,
+				ignoreSSLIssues: true
+			]
+			httpGet(params) { resp ->
+				result = resp.data.success
+			}
+			return result
 		}
-		return true
-	}
-	catch (e) {
-		log.error "Error uninstalling file: ${e}"
-	}
-	return false
+
+		catch (e) {
+			log.error "Error uninstalling file: ${e}"
+		}
+
+		return false
+
+    } else {
+		try {
+			params = [
+				uri: getBaseUrl(),
+				path: "/bundle/delete/$HEid",
+				headers: [
+		        		"Connection": 'keep-alive',
+					"Cookie": state.cookie
+				],
+				timeout: 300,
+				ignoreSSLIssues: true
+			]
+			httpGet(params) { resp ->
+	
+			}
+			return true
+		}
+		catch (e) {
+			log.error "Error uninstalling file: ${e}"
+		}
+		return false
+    }
 }
 
 def setBackgroundStatusMessage(msg, level="info") {
