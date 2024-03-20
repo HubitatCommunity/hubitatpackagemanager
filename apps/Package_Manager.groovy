@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.2
+ *  Hubitat Package Manager v1.9.3
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,7 +9,9 @@
  *
  *
  *
- *    csteele v1.9.2    added "Connection": 'keep-alive' to install/uninstall Apps, Drivers and Bundles
+ *    csteele v1.9.3    improved displayHeader to include the Main Menu Option selected
+ *                         refactored delete app to use new endpoint
+ *    csteele v1.9.2    added 'Connection': 'keep-alive' to install/uninstall Apps, Drivers and Bundles
  *                         extended timeout to 7 min (420 seconds) 
  *                         Take advantage of v2.3.8 Bundle install/uninstall 
  *    csteele v1.9.1    updatePackage() ignores blank app or driver definitions
@@ -43,7 +45,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.2"  }
+	public static String version()      {  return "v1.9.3"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -173,6 +175,7 @@ def appButtonHandler(btn) {
 	}
 }
 
+
 def prefOptions() {
 	state.remove("mainMenu")
 
@@ -221,6 +224,7 @@ def prefOptions() {
 				state.newRepoMessage = ""
 			}
 		}
+
 		section {
 			paragraph "What would you like to do?"
 			href(name: "prefPkgInstall", title: "Install", required: false, page: "prefPkgInstall", description: "Install a new package.")
@@ -261,7 +265,7 @@ def prefSettings(params) {
 		if (showInstall)
 			state.firstRun = true
 		return dynamicPage(name: "prefSettings", title: "", nextPage: "prefOptions", install: showInstall, uninstall: false) {
-			displayHeader()
+			displayHeader(' Settings')
 
 			section ("<b>Hub Security</b>") {
 				if (showSettingsForSecurityEnablement) {
@@ -360,7 +364,7 @@ def prefPkgInstall() {
 	logDebug "prefPkgInstall"
 
 	return dynamicPage(name: "prefPkgInstall", title: "", install: true, uninstall: false) {
-		displayHeader()
+		displayHeader(' Install')
 		section {
 			paragraph "<b>Install a Package</b>"
 			paragraph "How would you like to install this package?"
@@ -390,7 +394,7 @@ def prefInstallRepositorySearch() {
 	} 
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Install')
 		section {
 			paragraph "<b>Search</b> by $srchSrcTxt"
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
@@ -442,7 +446,7 @@ def prefInstallRepositorySearchResults() {
 		}
 		searchResults = searchResults.sort { it -> it.name }
 		return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
-			displayHeader()
+			displayHeader(' Install')
 
 			section {
 				paragraph "<b>Search Results for ${pkgSearch}</b> by $srchSrcTxt Search"
@@ -476,7 +480,7 @@ def prefPkgInstallUrl() {
 	installMode = "url"
 
 	return dynamicPage(name: "prefPkgInstallUrl", title: "", nextPage: "prefInstallChoices", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Install')
 		section {
 			paragraph "<b>Install a Package from URL</b>"
 			input "pkgInstall", "text", title: "Enter the URL of a package you wish to install (this should be a path to a <code>packageManifest.json</code> file).", required: true
@@ -547,7 +551,7 @@ def prefInstallChoices(params) {
 	logDebug "prefInstallChoices"
 
 	return dynamicPage(name: "prefInstallChoices", title: "", nextPage: "prefInstallVerify", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Install')
 		section {
 			addCss()
 			paragraph "<b>Install a Package from a Repository</b>"
@@ -699,7 +703,7 @@ def prefInstallVerify() {
 
 
 	return dynamicPage(name: "prefInstallVerify", title: "", nextPage: "prefInstall", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Install')
 		section {
 			paragraph "<b>Ready to install</b>"
 			def manifest = getJSONFile(pkgInstall)
@@ -739,7 +743,7 @@ def prefInstall() {
 	}
 	if (atomicState.backgroundActionInProgress != false) {
 		return dynamicPage(name: "prefInstall", title: "", nextPage: "prefInstall", install: false, uninstall: false, refreshInterval: 2) {
-			displayHeader()
+			displayHeader(' Install')
 			section {
 				showHideNextButton(false)
 				paragraph "<b>Installing</b>"
@@ -942,7 +946,7 @@ def prefPkgModify() {
 	logDebug "prefPkgModify"
 	def pkgsToList = getInstalledPackages(true)
 	return dynamicPage(name: "prefPkgModify", title: "", nextPage: "prefPkgModifyChoices", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Modify')
 		section {
 			paragraph "<b>Modify a Package</b>"
 			paragraph "Only packages that have optional components are shown below."
@@ -987,7 +991,7 @@ def prefPkgModifyChoices() {
 		}
 
 		return dynamicPage(name: "prefPkgModifyChoices", title: "", nextPage: "prefVerifyPackageChanges", install: false, uninstall: false) {
-			displayHeader()
+			displayHeader(' Modify')
 			section {
 				paragraph "<b>Modify a Package</b>"
 				paragraph "Items below that are checked are currently installed. Those that are not checked are currently <b>not</b> installed."
@@ -1261,7 +1265,7 @@ def prefPkgRepair() {
 	logDebug "prefPkgModify"
 	def pkgsToList = getInstalledPackages(false)
 	return dynamicPage(name: "prefPkgRepair", title: "", nextPage: "prefPkgRepairExecute", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Repair')
 		section {
 			paragraph "<b>Repair a Package</b>"
 			input "pkgRepair", "enum", title: "Choose the package to repair", options: pkgsToList, required: true
@@ -1288,9 +1292,10 @@ def prefPkgRepairExecute() {
 			atomicState.hpmUpgraded = false
 		runInMillis(1,performRepair)
 	}
+	atomicState.refreshIntervalValue = atomicState.refreshIntervalValue ? 2 : 11 	// first time refresh in 7, after refresh in 2 seconds
 	if (atomicState.backgroundActionInProgress != false) {
-		return dynamicPage(name: "prefPkgRepairExecute", title: "", nextPage: "prefPkgRepairExecute", install: false, uninstall: false, refreshInterval: 2) {
-			displayHeader()
+		return dynamicPage(name: "prefPkgRepairExecute", title: "", nextPage: "prefPkgRepairExecute", install: false, uninstall: false, refreshInterval: atomicState.refreshIntervalValue) {
+			displayHeader(' Repair')
 			section {
 				showHideNextButton(false)
 				paragraph "<b>Repairing Package</b>"
@@ -1300,6 +1305,7 @@ def prefPkgRepairExecute() {
 		}
 	}
 	else {
+		atomicState.refreshIntervalValue = null
 		if (!atomicState.hpmUpgraded)
 			return complete("Repair complete", "The package was sucessfully repaired, click Next to return to the Main Menu.")
 		else {
@@ -1484,7 +1490,7 @@ def prefPkgUninstall() {
 	def pkgsToList = getInstalledPackages(false)
 
 	return dynamicPage(name: "prefPkgUninstall", title: "", nextPage: "prefPkgUninstallConfirm", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' UnInstall')
 		section {
 			paragraph "<b>Uninstall Packages</b>"
 			input "pkgUninstall", "enum", title: "Choose the package(s) to uninstall", options: pkgsToList, required: true, multiple: true
@@ -1501,7 +1507,7 @@ def prefPkgUninstallConfirm() {
 		return prefOptions()
 	logDebug "prefPkgUninstallConfirm"
 	return dynamicPage(name: "prefPkgUninstallConfirm", title: "", nextPage: "prefUninstall", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' UnInstall')
 		section {
 			paragraph "<b>Uninstall Packages</b>"
 			paragraph "The following apps and drivers will be removed:"
@@ -1548,7 +1554,7 @@ def prefUninstall() {
 	}
 	if (atomicState.backgroundActionInProgress != false) {
 		return dynamicPage(name: "prefUninstall", title: "", nextPage: "prefUninstall", install: false, uninstall: false, refreshInterval: 2) {
-			displayHeader()
+			displayHeader(' UnInstall')
 			section {
 				showHideNextButton(false)
 				paragraph "<b>Uninstall in progress</b>"
@@ -1770,7 +1776,7 @@ def prefPkgUpdate() {
 	}
 	if (atomicState.backgroundActionInProgress != false) {
 		return dynamicPage(name: "prefPkgUpdate", title: "", nextPage: "prefPkgUpdate", install: false, uninstall: false, refreshInterval: 2) {
-			displayHeader()
+			displayHeader(' Update')
 			section {
 				paragraph "<b>Checking for updates</b>"
 				paragraph "Checking for updates... Please wait..."
@@ -1783,7 +1789,7 @@ def prefPkgUpdate() {
 		if (packagesWithUpdates.size() > 0) {
 			logDebug "Updates available"
 			return dynamicPage(name: "prefPkgUpdate", title: "", nextPage: "prefPkgVerifyUpdates", install: false, uninstall: false) {
-				displayHeader()
+				displayHeader(' Update')
 				section {
 					paragraph "<b>Updates Available</b>"
 					paragraph "Updates are available."
@@ -1864,7 +1870,7 @@ def prefPkgVerifyUpdates() {
 	optStrToInstall += "</ul>"
 
 	return dynamicPage(name: "prefPkgVerifyUpdates", title: "", nextPage: "prefPkgUpdatesComplete", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' Update')
 		section {
 			paragraph "<b>Install Updates?</b>"
 			paragraph "The following updates will be installed: ${updatesToInstall}"
@@ -1900,7 +1906,7 @@ def prefPkgUpdatesComplete() {
 	}
 	if (atomicState.backgroundActionInProgress != false) {
 		return dynamicPage(name: "prefPkgUpdatesComplete", title: "", nextPage: "prefPkgUpdatesComplete", install: false, uninstall: false, refreshInterval: 2) {
-			displayHeader()
+			displayHeader(' Update')
 			section {
 				showHideNextButton(false)
 				paragraph "<b>Installing Updates</b>"
@@ -2316,7 +2322,7 @@ def prefPkgMatchUp() {
 	logDebug "prefPkgMatchUp"
 
 	return dynamicPage(name: "prefPkgMatchUp", title: "", nextPage: "prefPkgMatchUpVerify", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' MatchUp')
 		section {
 			paragraph "<b>Match Installed Apps and Drivers</b>"
 			paragraph "This will go through all of the apps and drivers you currently have installed in Hubitat and attempt to find matching packages. This process can take minutes or even hours depending on how many apps and drivers you have installed. Click Next to continue."
@@ -2343,7 +2349,7 @@ def prefPkgMatchUpVerify() {
 	}
 	if (atomicState.backgroundActionInProgress != false) {
 		return dynamicPage(name: "prefPkgMatchUpVerify", title: "", nextPage: "prefPkgMatchUpVerify", install: false, uninstall: false, refreshInterval: 2) {
-			displayHeader()
+			displayHeader(' MatchUp')
 			section {
 				showHideNextButton(false)
 				paragraph "<b>Matching Installed Apps and Drivers</b>"
@@ -2363,7 +2369,7 @@ def prefPkgMatchUpVerify() {
 			}
 			itemsForList = itemsForList.sort { it-> it.value}
 			return dynamicPage(name: "prefPkgMatchUpVerify", title: "", nextPage: "prefPkgMatchUpComplete", install: false, uninstall: false) {
-				displayHeader()
+				displayHeader(' MatchUp')
 				section {
 					paragraph "<b>Found Matching Packages</b>"
 					paragraph "The following matches were found. There is a possibility that some may have matched incorrectly. Only check off the items that you believe are correct."
@@ -2536,7 +2542,7 @@ def prefPkgMatchUpComplete() {
 	}
 	state.firstRun = false
 	return dynamicPage(name: "prefPkgMatchUpComplete", title: "", install: true, uninstall: false) {
-		displayHeader()
+		displayHeader(' MatchUp')
 		section {
 			paragraph "<b>Match Up Complete</b>"
 			if (pkgUpToDate)
@@ -2560,7 +2566,7 @@ def prefPkgUnMatch() {
 	def pkgsToList = getInstalledPackages(false)
 
 	return dynamicPage(name: "prefPkgUnMatch", title: "", nextPage: "prefPkgUnMatchVerify", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' UnMatch')
 		section {
 			paragraph "<b>Package UnMatch</b>"
 			input "pkgUnMatch", "enum", title: "Choose packages to un-match", required: true, multiple: true, options: pkgsToList
@@ -2577,7 +2583,7 @@ def prefPkgUnMatchVerify() {
 	logDebug "prefPkgUnMatchVerify"
 
 	return dynamicPage(name: "prefPkgUnMatchVerify", title: "", nextPage: "prefPkgUnMatchComplete", install: false, uninstall: false) {
-		displayHeader()
+		displayHeader(' UnMatch')
 		section {
 			paragraph "<b>Un-Match Confirm</b>"
 			paragraph "The following packages will be Un-Matched:"
@@ -2621,7 +2627,7 @@ def prefPkgUnMatchComplete() {
 	}
 
 	return dynamicPage(name: "prefPkgUnMatchComplete", title: "", install: true, uninstall: false) {
-		displayHeader()
+		displayHeader(' UnMatch')
 		section {
 			paragraph "<b>Un-Match Complete</b>"
 		}
@@ -2676,7 +2682,7 @@ def prefPkgView() {
 
 
 	return dynamicPage(name: "prefPkgView", title: "", install: true, uninstall: false) {
-		displayHeader()
+		displayHeader(' View')
 		section {
 			paragraph "<b>View Apps and Drivers</b>"
 			paragraph "The apps and drivers listed below are managed by the Hubitat Package Manager."
@@ -3372,11 +3378,11 @@ def upgradeApp(id,appCode) {
 }
 
 def uninstallApp(id) {
-	if (location.hub.firmwareVersionString >= "2.3.7.130") {
+	if (location.hub.firmwareVersionString >= "2.3.8.128") {
 		try {
 			def params = [
 				uri: getBaseUrl(),
-				path: "/app/edit/deleteJson/$id", 
+				path: "/app/edit/deleteJsonSafe/$id", 
 				headers: [
 					"Cookie": state.cookie
 				],
@@ -4255,8 +4261,8 @@ def getFormat(type, myText=""){            // Modified from @Stephack Code
 	if(type == "title") return "<h2 style='color:#1A77C9;font-weight: bold'>${myText}</h2>"
 }
 
-def displayHeader() {
-	section (getFormat("title", "Hubitat Package Manager")) {
+def displayHeader(def txt = '') {
+	section (getFormat("title", "Hubitat Package Manager $txt")) {
 		paragraph "<div style='color:#1A77C9;text-align:right;font-weight:small;font-size:9px;'>Developed by: DCMeglio<br/>Current Version: ${version()} -  ${thisCopyright}</div>"
 		paragraph "\n<hr style='background-color:#1A77C9; height: 1px; border: 0;'></hr>"
 	}
