@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.3
+ *  Hubitat Package Manager v1.9.4
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,7 @@
  *
  *
  *
+ *    csteele v1.9.4    Take advantage of v2.3.4 uploadHubFile() 
  *    csteele v1.9.3    improved displayHeader to include the Main Menu Option selected
  *                         refactored delete app to use new endpoint
  *    csteele v1.9.2    added 'Connection': 'keep-alive' to install/uninstall Apps, Drivers and Bundles
@@ -45,7 +46,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.3"  }
+	public static String version()      {  return "v1.9.4"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -2786,8 +2787,8 @@ def checkForUpdates() {
 				if (notifySpecificPackages) {
 					if (notifyOnSuccess) {
 						for (successful in result.succeeded) {
-							log.debug successful
-							log.debug state.manifests[successful].packageName
+							logDebug successful
+							logDebug state.manifests[successful].packageName
 							notifyUpdateSuccessDevices*.deviceNotification(buildNotification("${state.manifests[successful].packageName} was updated successfully"))
 						}
 					}
@@ -3287,7 +3288,7 @@ def login() {
 				]
 			)
 			{ resp ->
-			log.debug resp.data?.text
+			logDebug resp.data?.text
 				if (resp.data?.text?.contains("The login information you supplied was incorrect."))
 					result = false
 				else {
@@ -3691,19 +3692,30 @@ def getDriverVersion(id) {
 
 // File Installation Methods
 def installFile(id, fileName, contents) {
-	try
-	{
-		def params = [
-			uri: getBaseUrl(),
-			path: "/hub/fileManager/upload",
-			query: [
-				"folder": "/"
-			],
-			headers: [
-				"Cookie": state.cookie,
-				"Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryDtoO2QfPwfhTjOuS"
-			],
-			body: """------WebKitFormBoundaryDtoO2QfPwfhTjOuS
+	if (location.hub.firmwareVersionString >= "2.3.4.134") {
+	    try
+		{
+	      uploadHubFile("${fileName}",contents.getBytes("UTF-8"))
+	      return true
+		}
+		catch (e) {
+			log.error "Error installing file: ${e}"
+		}
+		return false
+	} else {
+		try
+		{
+			def params = [
+				uri: getBaseUrl(),
+				path: "/hub/fileManager/upload",
+				query: [
+					"folder": "/"
+				],
+				headers: [
+					"Cookie": state.cookie,
+					"Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryDtoO2QfPwfhTjOuS"
+				],
+				body: """------WebKitFormBoundaryDtoO2QfPwfhTjOuS
 Content-Disposition: form-data; name="uploadFile"; filename="${fileName}"
 Content-Type: text/html
 
@@ -3714,18 +3726,19 @@ Content-Disposition: form-data; name="folder"
 
 
 ------WebKitFormBoundaryDtoO2QfPwfhTjOuS--""",
-			timeout: 300,
-			ignoreSSLIssues: true
-		]
-		httpPost(params) { resp ->
-
+				timeout: 300,
+				ignoreSSLIssues: true
+			]
+			httpPost(params) { resp ->
+	
+			}
+			return true
 		}
-		return true
+		catch (e) {
+			log.error "Error installing file: ${e}"
+		}
+		return false
 	}
-	catch (e) {
-		log.error "Error installing file: ${e}"
-	}
-	return false
 }
 
 def uninstallFile(id, fileName) {
@@ -3873,6 +3886,7 @@ def uninstallBundle(bundleName) {
 				timeout: 300,
 				ignoreSSLIssues: true
 			]
+			logDebug "--uninstallBundle: $params" 
 			httpGet(params) { resp ->
 				result = resp.data.success
 			}
