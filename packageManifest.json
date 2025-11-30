@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.9.3",
-	"dateReleased": "2024/03/19",
-	"releaseNotes": "v1.9.3    improved displayHeader to include the Main Menu Option selected\n             refactored delete app to use new endpoint\nv1.9.2    added 'Connection': 'keep-alive' to install/uninstall Apps, Drivers and Bundles\n             extended timeout to 7 min (420 seconds)\n             Take advantage of v2.3.8 Bundle install/uninstall",
+	"version": "1.9.4",
+	"dateReleased": "2025/11/30",
+	"releaseNotes": "v1.9.4    Take advantage of v2.3.4 uploadHubFile()\nv1.9.3    improved displayHeader to include the Main Menu Option selected\n             refactored delete app to use new endpoint",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
