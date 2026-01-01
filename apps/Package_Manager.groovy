@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.4
+ *  Hubitat Package Manager v1.9.5
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,8 +9,8 @@
  *
  *
  *    mavrrick 1.9.5	Update to allow seperate release notes for Stable and Beta Release
-							Updated ability to list installed bundle files from View Apps and Driver Page
-							Make Bundles upgradeable on their own
+ *							Updated ability to list installed bundle files from View Apps and Driver Page
+ *                            Make Bundles upgradeable on their own
  *    csteele v1.9.4    Take advantage of v2.3.4 uploadHubFile() 
  *    csteele v1.9.3    improved displayHeader to include the Main Menu Option selected
  *                         refactored delete app to use new endpoint
@@ -2189,9 +2189,10 @@ def performUpdates(runInBackground) {
 			if (manifest.betaVersion && includeBetas)
 				manifest.beta = true
 
-			for (bundleToInstall in manifest.bundles) {
-				def location = getItemDownloadLocation(bundleToInstall)
+			for (bundle in manifest.bundles) {
+				def location = getItemDownloadLocation(bundle)
 				setBackgroundStatusMessage("Installing ${location}")
+                bundle.beta = shouldInstallBeta(bundle) && !forceProduction(pkg, bundle.id)
 				if (!installBundle(location)) {
 					return rollback("Failed to install bundle ${location}. Please notify the package developer.", false)
 				}
