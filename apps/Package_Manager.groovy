@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.5
+ *  Hubitat Package Manager v1.9.4
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -2709,7 +2709,6 @@ def prefPkgView() {
 	def str = "<ul>"
 
 	def sortedPkgs = state.manifests.sort{ it-> it.value.packageName}
-//    logDebug "${sortedPkgs}"
 	for (pkg in sortedPkgs) {
 		def prependBar = false
 		str += "<li><b>${pkg.value.packageName}</b>"
@@ -2730,8 +2729,6 @@ def prefPkgView() {
 		}
 		str += "<ul>"
         for (bundle in pkg.value.bundles?.sort { it -> it.name}) {
-            logDebug " found bundles ${bundle}"
-//			if (bundle.heID != null)
 				str += "<li>${bundle.name} v${getItemVersion(bundle) ?: getItemVersion(pkg.value)} (bundle)</li>"
 		}
 		for (app in pkg.value.apps?.sort { it -> it.name}) {
