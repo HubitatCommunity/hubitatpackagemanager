@@ -48,7 +48,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.4"  }
+	public static String version()      {  return "v1.9.5"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
