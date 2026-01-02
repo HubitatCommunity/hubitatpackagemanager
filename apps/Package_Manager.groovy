@@ -10,7 +10,7 @@
  *
  *    mavrrick 1.9.5	Update to allow seperate release notes for Stable and Beta Release
  *							Updated ability to list installed bundle files from View Apps and Driver Page
- *                            Make Bundles upgradeable on their own
+ *                          Make Bundles upgradeable on their own
  *    csteele v1.9.4    Take advantage of v2.3.4 uploadHubFile() 
  *    csteele v1.9.3    improved displayHeader to include the Main Menu Option selected
  *                         refactored delete app to use new endpoint
@@ -48,7 +48,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.5"  }
+	public static String version()      {  return "v1.9.4"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -849,24 +849,26 @@ def performInstallation() {
 	// All files downloaded, execute installs
 	for (bundleToInstall in requiredBundles) {					// required = true
 		def location = getItemDownloadLocation(bundleToInstall.value)
-		setBackgroundStatusMessage("Installing ${bundleToInstall.value.name}") // from $location")
+		setBackgroundStatusMessage("Installing ${bundleToInstall.value.name} using ${location}") // from $location")
 		if (!installBundle(location, false)) {
 			state.manifests.remove(pkgInstall)
 			return rollback("Failed to install bundle ${bundleToInstall.value.name} using ${location}. Please notify the package developer.", false)
 		}
+        bundleToInstall.value.beta = shouldInstallBeta(bundleToInstall.value)
 	}
 
 	for (bundleToInstall in bundlesToInstall) {					// required = false (aka optional)
 		def matchedBundle = manifest.bundles.find { it.id == bundleToInstall}
 		if (matchedBundle != null) {
 			def location = getItemDownloadLocation(matchedBundle)
-			def primary = matchedBundle.primary ?: false
-			setBackgroundStatusMessage("Installing ${matchedBundle.name} from $location")
+			def primary = matchedBundle.primary ?: false           
+			setBackgroundStatusMessage("Installing ${matchedBundle.name} using ${location}")
 			if (!installBundle(location, primary)) {
 				state.manifests.remove(pkgInstall)
 				return rollback("Failed to install bundle ${matchedBundle.name} using ${location}. Please notify the package developer.", false)
 			}
 		}
+        bundleToInstall.value.beta = shouldInstallBeta(bundleToInstall.value)
 	}
 
 	for (requiredApp in requiredApps) {							// required = true
