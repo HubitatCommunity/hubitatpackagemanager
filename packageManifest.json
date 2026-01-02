@@ -6,7 +6,6 @@
 	"betaVersion": "1.9.5",
 	"dateReleased": "2025/11/30",
 	"releaseNotes": "v1.9.4    Take advantage of v2.3.4 uploadHubFile()\nv1.9.3    improved displayHeader to include the Main Menu Option selected\n             refactored delete app to use new endpoint",
-	"betaReleaseNotes": "**Beta v1.9.5**\n - Update to support alternate Beta Release Notest\n - Update to add space between version number and beta tag\n - Update to improve bundle handeling"
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
