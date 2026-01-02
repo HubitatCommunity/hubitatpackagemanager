@@ -3,6 +3,7 @@
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
 	"version": "1.9.4",
+	"betaVersion": "1.9.5",
 	"dateReleased": "2025/11/30",
 	"releaseNotes": "v1.9.4    Take advantage of v2.3.4 uploadHubFile()\nv1.9.3    improved displayHeader to include the Main Menu Option selected\n             refactored delete app to use new endpoint",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
@@ -12,6 +13,7 @@
 			"id" : "2e6b1674-a87b-41a8-bd65-5cbbf78d842e",
 			"name": "Hubitat Package Manager",
 			"location": "https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/main/apps/Package_Manager.groovy",
+			"betaLocation": "https://raw.githubusercontent.com/HubitatCommunity/hubitatpackagemanager/beta/apps/Package_Manager.groovy",
 			"required": true
 		}
 	]
