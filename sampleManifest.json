@@ -9,6 +9,7 @@
 	"communityLink": "link.to.forum.thread",
 	"licenseFile": "link.to.license.file.that.must.be.accepted",
 	"releaseNotes": "These are the changes in this version. You can use \n to put a new line in your text.",
+	"betaReleaseNotes": "Notes to be present when Beta is option is used"
 	"apps" : [
 		{
 			"id" : "bf7c20fb-1fa9-436f-9cfc-fb8520cda22a",
