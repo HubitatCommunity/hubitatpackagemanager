@@ -4252,16 +4252,12 @@ def findMatchingAppOrDriver(installedList, item) {
 }
 
 def shouldInstallBeta(item) {
-	if (pkgBetaOn != null) {
-		return item.betaLocation != null && pkgBetaOn.contains(item.name)
-	}
+	return item.betaLocation != null && includeBetas
 }
 
 def getItemDownloadLocation(item) {
-	if (pkgBetaOn != null) {
-		if (item.betaLocation != null && pkgBetaOn.contains(item.name))
-			return item.betaLocation 
-	}
+	if (item.betaLocation != null && includeBetas)
+		return item.betaLocation
 	return item.location
 }
 
