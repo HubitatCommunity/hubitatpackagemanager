@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.9.6",
-	"dateReleased": "2026/01/05",
-	"releaseNotes": "v1.9.6    Update to allow seperate release notes for Stable and Beta Release\n          Updated ability to list installed bundle files from View Apps and Driver Page\n          Make Bundles upgradeable on their own\nv1.9.5    Take advantage of v2.3.4 deleteHubFile()\nv1.9.4    Take advantage of v2.3.4 uploadHubFile()",
+	"version": "1.9.7",
+	"dateReleased": "2026/01/09",
+	"releaseNotes": "v1.9.7    Add ability to individually select apps/packages to include Beta Channels\n          display Release Notes for Installs (prefInstallVerify)\nv1.9.6    Update to allow seperate release notes for Stable and Beta Release\n          Updated ability to list installed bundle files from View Apps and Driver Page\n          Make Bundles upgradeable on their own",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
