@@ -12,7 +12,7 @@
  *    mavrrick v1.9.7   Add ability to individually select apps/packages to include Beta Channels
  *    csteele  v1.9.7    display Release Notes for Installs (prefInstallVerify)
  *    mavrrick v1.9.6	Update to allow separate release notes for Stable and Beta Release
- *				   Updated ability to list installed bundle files from View Apps and Driver Page
+ *				           Updated ability to list installed bundle files from View Apps and Driver Page
  *                         Make Bundles upgradeable on their own
  *    csteele v1.9.5    Take advantage of v2.3.4 deleteHubFile() 
  *    csteele v1.9.4    Take advantage of v2.3.4 uploadHubFile() 
