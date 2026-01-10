@@ -1667,8 +1667,7 @@ def performUpdateCheck() {
 	packagesWithUpdates = [:]
 
 	for (pkg in state.manifests) {
-		try 
-        {
+		try {
 			setBackgroundStatusMessage("Checking for updates for ${state.manifests[pkg.key].packageName}")
 			def manifest = getJSONFile(pkg.key)
 			if (shouldInstallBeta(manifest)) {
