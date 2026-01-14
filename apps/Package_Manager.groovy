@@ -12,7 +12,7 @@
  *    mavrrick v1.9.7   Add ability to individually select apps/packages to include Beta Channels
  *    csteele  v1.9.7    display Release Notes for Installs (prefInstallVerify)
  *    mavrrick v1.9.6	Update to allow separate release notes for Stable and Beta Release
- *				           Updated ability to list installed bundle files from View Apps and Driver Page
+ *				   Updated ability to list installed bundle files from View Apps and Driver Page
  *                         Make Bundles upgradeable on their own
  *    csteele v1.9.5    Take advantage of v2.3.4 deleteHubFile() 
  *    csteele v1.9.4    Take advantage of v2.3.4 uploadHubFile() 
@@ -298,7 +298,7 @@ def prefSettings(params) {
 					input "txtEnable", "bool", title: "Enable text logging", defaultValue: true
 					input "includeBetas", "bool", title: "When updating, install pre-release versions. Note: Pre-releases often include more bugs and should be considered beta software", defaultValue: true, submitOnChange: true
 					if (includeBetas) {
-						input "pkgBetaOn", "enum", title: "Choose which app/packages to enable Beta/Early Access code", options: pkgsToList.values(), multiple: true, required: false
+						input "pkgBetaOn", "enum", title: "Choose which app/packages to enable Beta/Early Access code", options: pkgsToList.values(), multiple: true, required: true
 					}
 				}
 				section {
@@ -1691,13 +1691,13 @@ def performUpdateCheck() {
 				log.warn "New version of ${manifest.packageName} found but requires ${manifest.minimumHEVersion}, please update your firmware to upgrade."
 				continue
 			}
-			def betaSelected = pkgBetaOn?.contains(state.manifests[pkg.key].packageName)
-			def newVersionResult = newVersionAvailable(manifest, state.manifests[pkg.key], betaSelected)
+			def includeBetas = pkgBetaOn?.contains(state.manifests[pkg.key].packageName)
+			def newVersionResult = newVersionAvailable(manifest, state.manifests[pkg.key], includeBetas)
 			if (newVersionResult.newVersion) {
-				def version = betaSelected && manifest.betaVersion != null ? manifest.betaVersion : manifest.version
+				def version = pkgBetaOn?.contains(state.manifests[pkg.key].packageName) && manifest.betaVersion != null ? manifest.betaVersion : manifest.version
 				packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (installed: ${state.manifests[pkg.key].version ?: "N/A"} current: ${version})"]
 				logDebug "Updates found for package ${pkg.key}"
-				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+				def notes = (pkgBetaOn?.contains(state.manifests[pkg.key].packageName) && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
 				addUpdateDetails(pkg.key, manifest.packageName, notes, "package", null, newVersionResult.forceProduction)
 			}
 			else {
@@ -1707,13 +1707,13 @@ def performUpdateCheck() {
 						if (app.id) {  // skip if an app is not actually defined
 							def installedApp = getAppById(state.manifests[pkg.key], app.id)
 							if (app?.version != null && installedApp?.version != null) {
-								newVersionResult = newVersionAvailable(app, installedApp, betaSelected)
+								newVersionResult = newVersionAvailable(app, installedApp, includeBetas)
 								if (newVersionResult.newVersion) {
 									if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
 										packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
 									}
 									appOrDriverNeedsUpdate = true
-                              				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                              				def notes = (pkgBetaOn?.contains(state.manifests[pkg.key].packageName) && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                               				addUpdateDetails(pkg.key, manifest.packageName, notes, "specificapp", app, newVersionResult.forceProduction)
 								}
 							}
@@ -1722,7 +1722,7 @@ def performUpdateCheck() {
 									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new requirement)"]
 								}
 								appOrDriverNeedsUpdate = true
-                  					def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                  					def notes = (pkgBetaOn?.contains(state.manifests[pkg.key].packageName) && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                   					addUpdateDetails(pkg.key, manifest.packageName, notes, "reqapp", app, newVersionResult.forceProduction)
 							}
 							else if (!installedApp && !app.required) {
@@ -1730,7 +1730,7 @@ def performUpdateCheck() {
 									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (new optional app or driver is available)"]
 								}
 								appOrDriverNeedsUpdate = true
-                        				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                        				def notes = (pkgBetaOn?.contains(state.manifests[pkg.key].packageName) && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                         				addUpdateDetails(pkg.key, manifest.packageName, notes, "optapp", app, newVersionResult.forceProduction)
 							}
 						}
@@ -1744,13 +1744,13 @@ def performUpdateCheck() {
 						if (driver.id) {  // skip if a driver is not actually defined
 							def installedDriver = getDriverById(state.manifests[pkg.key], driver.id)
 							if (driver?.version != null && installedDriver?.version != null) {
-								newVersionResult = newVersionAvailable(driver, installedDriver, betaSelected)
+								newVersionResult = newVersionAvailable(driver, installedDriver, includeBetas)
 								if (newVersionResult.newVersion) {
 									if (!appOrDriverNeedsUpdate) {// Only add a package to the list once
 										packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
 									}
 									appOrDriverNeedsUpdate = true
-                        					def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                        					def notes = (includeBetas && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                         					addUpdateDetails(pkg.key, manifest.packageName, notes, "specificdriver", driver, newVersionResult.forceProduction)
 								}
 							}
@@ -1759,11 +1759,11 @@ def performUpdateCheck() {
 									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new requirement)"]
 								}
 								appOrDriverNeedsUpdate = true
-                        				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                        				def notes = (includeBetas && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                         				addUpdateDetails(pkg.key, manifest.packageName, notes, "reqdriver", driver, newVersionResult.forceProduction)
 							}
 							else if (!installedDriver && !driver.required) {
-                        				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                        				def notes = (includeBetas && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                         				addUpdateDetails(pkg.key, manifest.packageName, notes, "optdriver", driver, newVersionResult.forceProduction)
 								if (!appOrDriverNeedsUpdate) { // Only add a package to the list once
 									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (new optional app or driver is available)"]
@@ -1781,13 +1781,13 @@ def performUpdateCheck() {
 				        if (bundle.id) { // skip if a bundle is not actually defined
 				            def installedBundle = getBundleById(state.manifests[pkg.key], bundle.id)
 				            if (bundle?.version != null && installedBundle?.version != null) {
-							newVersionResult = newVersionAvailable(bundle, installedBundle, betaSelected)
+							newVersionResult = newVersionAvailable(bundle, installedBundle)
 							if (newVersionResult.newVersion) {
 								if (!appOrDriverNeedsUpdate) {// Only add a package to the list once
 									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
 								}
 								appOrDriverNeedsUpdate = true
-                        				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+                        				def notes = (includeBetas && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
                         				addUpdateDetails(pkg.key, manifest.packageName, notes, "bundle", bundle, newVersionResult.forceProduction)
 							}
 						} 
@@ -2174,7 +2174,7 @@ def performUpdates(runInBackground) {
 			initializeRollbackState("update")
 
 			manifestForRollback = manifest
-			if (manifest.betaVersion && pkgBetaOn?.contains(state.manifests[pkg.key].packageName))
+			if (manifest.betaVersion && includeBetas)
 				manifest.beta = true
 			for (bundle in manifest.bundles) {
 				def location = getItemDownloadLocation(bundle)
@@ -4252,13 +4252,30 @@ def findMatchingAppOrDriver(installedList, item) {
 }
 
 def shouldInstallBeta(item) {
-	return item.betaLocation != null && includeBetas
+    def betaObjects = betaObjList()
+		return item.betaLocation != null && betaObjects.contains(item.name)
 }
 
 def getItemDownloadLocation(item) {
-	if (item.betaLocation != null && includeBetas)
-		return item.betaLocation
+    def betaObjects = betaObjList()
+		if (item.betaLocation != null && betaObjList.contains(item.name))
+			return item.betaLocation 
 	return item.location
+} 
+
+def betaObjList() { 
+    def betaObjects = (pkgBetaOn ?: []).toSet()
+    def manifests = state.manifests ?: [:]
+    
+    manifests.each { _, manifest ->
+        if (betaObjects.contains(manifest.packageName)) {
+            [manifest.drivers, manifest.bundles, manifest.apps]
+                .findAll { it }
+                .each { it.each { betaObjects.add(it.name) } }
+        }
+    }
+    
+    return betaObjects.toList()
 }
 
 def getItemVersion(item) {
