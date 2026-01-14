@@ -642,6 +642,11 @@ def prefInstallChoices(params) {
 					input "bundlesToInstall", "enum", title: "Select the bundles to install", options: bundles, hideWhenEmpty: true, multiple: true
 				}
 			}
+            section("") {
+                if (manifest.toMapString().contains("betaVersion")) {
+                    input "installBeta", "bool", title: "Install beta package", defaultValue: false
+                }
+            }
 		}
 		section {
 			paragraph "<hr>"
@@ -718,7 +723,7 @@ def prefInstallVerify() {
 			def manifest = getJSONFile(pkgInstall)
 
 			def pkgToInstall = "<ul>"
-			def notes = (manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
+			def notes = (manifest.betaReleaseNotes && installBeta) ? manifest.betaReleaseNotes : manifest.releaseNotes
 			pkgToInstall += "<li>${manifest.packageName}"
 			pkgToInstall += "<br>"
 			pkgToInstall += "<textarea rows=6 class='mdl-textfield' readonly='true'>$notes</textarea>"
@@ -786,6 +791,22 @@ def performInstallation() {
 		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
 	def manifest = getJSONFile(pkgInstall)
 
+    if (installBeta){
+        if (!includeBetas) {
+            app.updateSetting("includeBetas", true)
+        }
+        if (!pkgBetaOn) {
+            List tmp = [manifest.packageName]
+            app.updateSetting("pkgBetaOn", tmp as List)
+            
+        } else {
+            curretSetting = app.getSetting("pkgBetaOn")
+            log.warn "curretSetting is set to ${curretSetting}"
+            curretSetting.add(manifest.packageName)
+            app.updateSetting("pkgBetaOn", curretSetting)
+        }
+    }
+    
 	if (shouldInstallBeta(manifest)) {
 		manifest = getJSONFile(getItemDownloadLocation(manifest))
 		manifest.beta = true
@@ -958,6 +979,7 @@ def performInstallation() {
 	}
 
 	atomicState.backgroundActionInProgress = false
+    app.updateSetting("installBeta", false)
 }
 
 // Modify a package pathway
