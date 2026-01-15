@@ -805,7 +805,6 @@ def performInstallation() {
             
         } else {
             curretSetting = app.getSetting("pkgBetaOn")
-            log.warn "curretSetting is set to ${curretSetting}"
             curretSetting.add(manifest.packageName)
             app.updateSetting("pkgBetaOn", curretSetting)
         }
@@ -1669,7 +1668,12 @@ def performUninstall() {
 				return rollback("Failed to uninstall bundle ${bundle.name}.", false)
 			}
 		}
-
+        
+        app.updateSetting("pkgBetaOn", pkgBetaOn.minus(pkg.packageName))
+        if (pkgBetaOn.isEmpty()) {        
+            app.updateSetting("includeBetas", false)
+        }
+        
 		state.manifests.remove(pkgToUninstall)
 	}
 
@@ -1763,7 +1767,7 @@ def performUpdateCheck() {
 						}
 					}
 					catch (any) {
-						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. Please notify the package developer."
+						logInfo "Skipping app a bad manifest ${state.manifests[pkg.key].packageName}. Please notify the package developer."
 					}
 				}
 				for (driver in manifest.drivers) {
@@ -1800,7 +1804,7 @@ def performUpdateCheck() {
 						}
 					}
 					catch (e) {
-						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
+						logInfo "Skipping driver a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
 					}
 				}
 				for (bundle in manifest.bundles) {
@@ -1821,13 +1825,13 @@ def performUpdateCheck() {
 				        }
 				    }
 				    catch (e) {
-						logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
+						logInfo "Skipping bundle a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
 				    }
 				}
 			}
 		}
 		catch (e) {
-			logInfo "Skipping a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
+			logInfo "Skipping package a bad manifest ${state.manifests[pkg.key].packageName}. ${e} Please notify the package developer."
 		}
 	}
 	packagesWithUpdates = packagesWithUpdates.sort { it -> it.value }
