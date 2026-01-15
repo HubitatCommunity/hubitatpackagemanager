@@ -1808,7 +1808,7 @@ def performUpdateCheck() {
 				        if (bundle.id) { // skip if a bundle is not actually defined
 				            def installedBundle = getBundleById(state.manifests[pkg.key], bundle.id)
 				            if (bundle?.version != null && installedBundle?.version != null) {
-							newVersionResult = newVersionAvailable(bundle, installedBundle)
+							newVersionResult = newVersionAvailable(bundle, installedBundle, betaSelected)
 							if (newVersionResult.newVersion) {
 								if (!appOrDriverNeedsUpdate) {// Only add a package to the list once
 									packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (driver or app has a new version)"]
