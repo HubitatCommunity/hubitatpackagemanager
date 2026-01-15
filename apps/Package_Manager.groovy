@@ -375,7 +375,8 @@ def prefPkgInstall() {
 	if (state.mainMenu)
 		return prefOptions()
 	logDebug "prefPkgInstall"
-
+    app.updateSetting("installBeta", false)
+    
 	return dynamicPage(name: "prefPkgInstall", title: "", install: true, uninstall: false) {
 		displayHeader(' Install')
 		section {
