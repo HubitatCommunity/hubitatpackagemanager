@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.9.7",
+	"version": "1.9.8",
 	"dateReleased": "2026/01/09",
-	"releaseNotes": "v1.9.7    Add ability to individually select apps/packages to include Beta Channels\n          display Release Notes for Installs (prefInstallVerify)\nv1.9.6    Update to allow seperate release notes for Stable and Beta Release\n          Updated ability to list installed bundle files from View Apps and Driver Page\n          Make Bundles upgradeable on their own",
+	"releaseNotes": "v1.9.8    Fix issue with "shouldInstallBeta" and "getItemDownloadLocation" methods\n          Added ability to install items with beta turned on. Update needed values accordingly\n          Updated Release Notes for install to display proper release info based on selection of Beta flag during install\nv1.9.7    Add ability to individually select apps/packages to include Beta Channels\n          display Release Notes for Installs (prefInstallVerify)",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
