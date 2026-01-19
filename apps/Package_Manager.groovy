@@ -1673,8 +1673,10 @@ def performUninstall() {
 			}
 		}
 
-		app.updateSetting("pkgBetaOn", pkgBetaOn?.minus(pkg.packageName))
-		if (pkgBetaOn.isEmpty()) app.updateSetting("includeBetas", false)
+        if (pkgBetaOn) {
+            app.updateSetting("pkgBetaOn", pkgBetaOn.minus(pkg.packageName))
+			if (pkgBetaOn.isEmpty()) app.updateSetting("includeBetas", false)
+        }
         
 		state.manifests.remove(pkgToUninstall)
 	}
