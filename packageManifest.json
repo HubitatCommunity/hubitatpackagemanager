@@ -4,7 +4,7 @@
 	"author": "Dominick Meglio",
 	"version": "1.9.9",
 	"dateReleased": "2026/02/15",
-	"releaseNotes": "v1.9.9    UpgradeApp() moved to the Top to remediate HPM crashing during Upgrade of itself due to the methods moving post-upgrade.\n          Replaced "Fast Search" algorithm to also use fuzzy, thus eliminating the need for two choices. Delete Azure query.\n          Created an external Fast-Track Match Up tool. Default on but Optional.\nv1.9.8    Fix issue with 'shouldInstallBeta' and 'getItemDownloadLocation' methods\n          Added ability to install items with beta turned on. Update needed values accordingly\n          Updated Release Notes for install to display proper release info based on selection of Beta flag during install",
+	"releaseNotes": "v1.9.9    UpgradeApp() moved to the Top to remediate HPM crashing during Upgrade of itself due to the methods moving post-upgrade.\n          Replaced 'Fast Search' algorithm to also use fuzzy, thus eliminating the need for two choices. Delete Azure query.\n          Created an external Fast-Track Match Up tool. Default on but Optional.\nv1.9.8    Fix issue with 'shouldInstallBeta' and 'getItemDownloadLocation' methods\n          Added ability to install items with beta turned on. Update needed values accordingly\n          Updated Release Notes for install to display proper release info based on selection of Beta flag during install",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
