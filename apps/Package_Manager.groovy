@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.8
+ *  Hubitat Package Manager v1.9.9
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,9 @@
  *
  *
  *
+ *    csteele  v1.9.9   UpgradeApp() moved to the Top to remediate HPM crashing during Upgrade of itself due to the methods moving post-upgrade.
+ *                         Replaced "Fast Search" algorithm to also use fuzzy, thus eliminating the need for two choices. Delete Azure query.
+ *                         Created an external Fast-Track Match Up tool. Default on but Optional. 
  *    mavrrick v1.9.8   Fix issue with "shouldInstallBeta" and "getItemDownloadLocation" methods
  *                         Added ability to install items with beta turned on. Update needed values accordingly
  *                         Updated Release Notes for install to display proper release info based on selection of Beta flag during install
@@ -55,7 +58,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.8"  }
+	public static String version()      {  return "v1.9.9"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -106,10 +109,11 @@ preferences {
 
 import groovy.transform.Field
 import java.util.regex.Matcher
+
 @Field static String repositoryListing = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/repositories.json"
 @Field static String settingsFile      = "https://raw.githubusercontent.com/HubitatCommunity/hubitat-packagerepositories/master/settings.json"
-@Field static String searchFuzzyApiUrl = "https://hubitatpackagemanager.azurewebsites.net/graphql"
-@Field static String searchFastApiUrl  = "https://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"
+@Field static String searchApiUrl  = "https://hubitatpackagemanager.hubitatcommunity.com/searchHPMpkgs2.php"
+@Field static String preBuiltUrl   = "https://hubitatpackagemanager.hubitatcommunity.com/hpmRepoCache.php"
 @Field static List categories = []
 @Field static List allPackages = []
 @Field static def completedActions = [:]
@@ -136,9 +140,39 @@ import java.util.regex.Matcher
 @Field static List driversToUninstallForModify = []
 @Field static List packagesMatchingInstalledEntries = []
 
-@Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN"]
+@Field static List iconTags = ["ZWave", "Zigbee", "Cloud", "LAN", "Matter"]
 @Field static String srchSrcTxt = ""
-@Field static String searchApiUrl = ""
+
+// method moved to the Top to possibly remediate HPM crashing during Upgrade of itself.
+def upgradeApp(id,appCode) {
+	try {
+		def params = [
+			uri: getBaseUrl(),
+			path: "/app/ajax/update",
+			requestContentType: "application/x-www-form-urlencoded",
+			headers: [
+				"Connection": 'keep-alive',
+				"Cookie": state.cookie
+			],
+			body: [
+				id: id,
+				version: getAppVersion(id),
+				source: appCode
+			],
+			timeout: 420,
+			ignoreSSLIssues: true
+		]
+		def result = false
+		httpPost(params) { resp ->
+			result = resp.data.status == "success"
+		}
+		return result
+	}
+	catch (e) {
+		log.error "Error upgrading app: ${e}"
+	}
+	return null
+}
 
 def installed() {
 	initialize()
@@ -298,7 +332,7 @@ def prefSettings(params) {
 				section ("<b>General</b>") {
 					input "debugOutput", "bool", title: "Enable debug logging", defaultValue: true
 					input "txtEnable", "bool", title: "Enable text logging", defaultValue: true
-					input "includeBetas", "bool", title: "When updating, install pre-release versions. Note: Pre-releases often include more bugs and should be considered beta software", defaultValue: true, submitOnChange: true
+					input "includeBetas", "bool", title: "When updating, install pre-release versions. Note: Pre-releases often include more bugs and should be considered beta software", defaultValue: false, submitOnChange: true
 					if (includeBetas) {
 						input "pkgBetaOn", "enum", title: "Choose which app/packages to enable Beta/Early Access code", options: pkgsToList.values(), multiple: true, required: true
 					}
@@ -399,20 +433,12 @@ def prefInstallRepositorySearch() {
 	state.remove("back")
 	logDebug "prefInstallRepositorySearch"
 	installMode = "search"
-	searchApiUrl = searchFuzzyApiUrl
-	srchSrcTxt = "Fuzzy"
-	if (settings?.srchMethod != false) {
-		srchSrcTxt = "Fast"
-		searchApiUrl = searchFastApiUrl
-	} 
 
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader(' Install')
 		section {
 			paragraph "<b>Search</b> by $srchSrcTxt"
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
-			paragraph "<b>Search Method - Fast or Fuzzy Search</b>"
-			input "srchMethod", "bool", title: "Fast Search", defaultValue: true, submitOnChange: true
 			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
@@ -449,10 +475,8 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
-				if (settings?.srchMethod != false) {
 					def pkg_tags = packageItem.tags[1..-2].tokenize(',')
 					packageItem.tags = pkg_tags
-				}
 				packageItem << [author: repo.author, gitHubUrl: repo.gitHubUrl, payPalUrl: repo.payPalUrl, installed: state.manifests[packageItem.location] != null]
 				searchResults << packageItem
 			}
@@ -1672,11 +1696,11 @@ def performUninstall() {
 				return rollback("Failed to uninstall bundle ${bundle.name}.", false)
 			}
 		}
-
-        if (pkgBetaOn) {
-            app.updateSetting("pkgBetaOn", pkgBetaOn.minus(pkg.packageName))
+        
+		if (pkgBetaOn) {
+			app.updateSetting("pkgBetaOn", pkgBetaOn.minus(pkg.packageName))
 			if (pkgBetaOn.isEmpty()) app.updateSetting("includeBetas", false)
-        }
+		}
         
 		state.manifests.remove(pkgToUninstall)
 	}
@@ -1693,7 +1717,6 @@ def addUpdateDetails(pkgId, pkgName, releaseNotes, updateType, item, forceProduc
 		updateDetails[pkgId].releaseNotes = releaseNotes
 	updateDetails[pkgId].items << [type: updateType,  id: item?.id, name: item?.name, forceProduction: forceProduction]
 
-	logDebug "Updates found ${updateType} for ${pkgId} -> ${item?.name} (force production: ${forceProduction})"
 }
 
 // Update packages pathway
@@ -1730,7 +1753,7 @@ def performUpdateCheck() {
 			if (newVersionResult.newVersion) {
 				def version = betaSelected && manifest.betaVersion != null ? manifest.betaVersion : manifest.version
 				packagesWithUpdates << ["${pkg.key}": "${state.manifests[pkg.key].packageName} (installed: ${state.manifests[pkg.key].version ?: "N/A"} current: ${version})"]
-				logDebug "Updates found for package ${pkg.key}"
+				setBackgroundStatusMessage("Updates found for package ${pkg.key}")
 
 				def notes = (betaSelected && manifest.betaReleaseNotes) ? manifest.betaReleaseNotes : manifest.releaseNotes
 				addUpdateDetails(pkg.key, manifest.packageName, notes, "package", null, newVersionResult.forceProduction)
@@ -2409,6 +2432,8 @@ def prefPkgMatchUp() {
 		section {
 			paragraph "<b>Match Installed Apps and Drivers</b>"
 			paragraph "This will go through all of the apps and drivers you currently have installed in Hubitat and attempt to find matching packages. This process can take minutes or even hours depending on how many apps and drivers you have installed. Click Next to continue."
+			paragraph "<b>Match Up Method - Fast or Local</b>"
+			input "matchMethod", "bool", title: "Fast Match", defaultValue: true, submitOnChange: true
 		}
 		if (!state.firstRun) {
 			section {
@@ -2425,7 +2450,8 @@ def prefPkgMatchUpVerify() {
 	if (errorOccurred == true) {
 		return buildErrorPage(errorTitle, errorMessage)
 	}
-	if (atomicState.backgroundActionInProgress == null) {
+
+    	if (atomicState.backgroundActionInProgress == null) {
 		logDebug "Performing Package Matching"
 		atomicState.backgroundActionInProgress = true
 		performPackageMatchup()
@@ -2442,12 +2468,12 @@ def prefPkgMatchUpVerify() {
 		}
 	}
 	else {
-		if (packagesMatchingInstalledEntries?.size() > 0)
-		{
+		if (state.fastTrackResults) { packagesMatchingInstalledEntries = state.fastTrackResults }
+		if (packagesMatchingInstalledEntries?.size() > 0) {
 			def itemsForList = [:]
 			for (pkg in packagesMatchingInstalledEntries) {
 
-				def appAndDriverMatches = ((pkg.matchedApps?.collect { it -> it.title } ?: []) + (pkg.matchedDrivers?.collect { it -> it.title } ?: [])).join(", ")
+				def appAndDriverMatches = ((pkg.matchedApps?.collect { it -> it.title ?: it['title'] } ?: []) + (pkg.matchedDrivers?.collect { it -> it.title ?: it['title'] } ?: [])).join(", ")
 				itemsForList << ["${pkg.location}":"${pkg.name} - matched (${appAndDriverMatches})"]
 			}
 			itemsForList = itemsForList.sort { it-> it.value}
@@ -2477,10 +2503,113 @@ def prefPkgMatchUpVerify() {
 
 def performPackageMatchup() {
 	if (!login())
-		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
+	    return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
 
+	if (!matchMethod) {
+		standardMatchupFallback()
+		return
+	}
+	state.matchedPackages = []    // Clear previous matches to ensure a fresh test
+	state.status = "Fast-tracking matchup..."
+		
+	def allInstalledApps = getAppList().collect { it ->
+		[
+			id       : it.id.toString(),
+			title    : (it.title ?: it.label ?: it.name ?: "Unknown").toString(),
+			namespace: it.namespace?.toString() ?: ""
+		]
+	}
+	
+	def allInstalledDrivers = getDriverList().collect { it ->
+		[
+			id       : it.id.toString(),
+			title    : (it.title ?: it.label ?: it.name ?: "Unknown").toString(),
+			namespace: it.namespace?.toString() ?: ""
+		]
+	}
+	
+	// Filter out anything that already has an associated package in HPM's state
+	state.manifests.each { uri, manifest ->
+		manifest.apps?.each { app ->
+			if (app.heID != null) {
+			    allInstalledApps.removeIf { it.id == app.heID.toString() }
+			}
+		}
+		manifest.drivers?.each { driver ->
+			if (driver.heID != null) {
+			    allInstalledDrivers.removeIf { it.id == driver.heID.toString() }
+			}
+		}
+	}
+	
+	def postBody = [
+		allInstalledApps: allInstalledApps,
+		allInstalledDrivers: allInstalledDrivers
+	]
+
+	packagesMatchingInstalledEntries = []
+	def params = [
+		uri: preBuiltUrl,
+		body: postBody,
+		requestContentType: "application/json",
+		contentType: "application/json",
+		timeout: 30 
+	]
+
+	logDebug "HPM: Sending metadata to Fast-Track server."
+
+	try {
+		httpPost(params) { response ->
+			if (response.status == 200 && response.data instanceof List) {
+				setBackgroundStatusMessage("HPM: Fast-Track matched ${response.data.size()} packages.")
+
+				def packagesToMatchAgainst = response.data
+				packagesMatchingInstalledEntries = [] 
+
+				for (pkg in packagesToMatchAgainst) {
+					def matchedInstalledApps = []
+					def matchedInstalledDrivers = []
+
+					// Match Apps back to real Hubitat objects
+					pkg.matchedApps?.each { sApp ->
+						def localMatch = allInstalledApps.find { it.id == sApp.id.toString() }
+						if (localMatch) matchedInstalledApps << localMatch
+					}
+
+					// Match Drivers back to real Hubitat objects
+					pkg.matchedDrivers?.each { sDrv ->
+						def localMatch = allInstalledDrivers.find { it.id == sDrv.id.toString() }
+						if (localMatch) matchedInstalledDrivers << localMatch
+					}
+
+					// Populate and add to the UI list
+					if (matchedInstalledApps.size() > 0 || matchedInstalledDrivers.size() > 0) {
+						pkg.matchedApps = matchedInstalledApps
+						pkg.matchedDrivers = matchedInstalledDrivers
+						packagesMatchingInstalledEntries << pkg
+					}
+				}
+
+				// Move status updates OUTSIDE the for loop
+				state.fastTrackResults = packagesMatchingInstalledEntries
+				setBackgroundStatusMessage("Matchup complete")
+				atomicState.backgroundActionInProgress = false
+				return 
+			
+			} else {
+		        log.warn "HPM: Server returned unexpected data format. Falling back."
+		        standardMatchupFallback()
+			}
+		}
+	} catch (e) {
+		log.error "HPM: Fast-Track failed. Error: ${e}"
+		standardMatchupFallback()
+	}
+}
+
+// Helper to keep the code clean
+def standardMatchupFallback() {
 	updateRepositoryListing()
-
 	getMultipleJSONFiles(installedRepositories, performMatchupRepoRefreshComplete, performMatchupRepoRefreshStatus)
 }
 
@@ -2513,7 +2642,7 @@ def performMatchupRepoRefreshComplete(results, data) {
 
 def performMatchupRepoRefreshStatus(uri, data) {
 	def repoName = getRepoName(uri)
-	setBackgroundStatusMessage("Refreshed ${repoName}")
+	setBackgroundStatusMessage("Refreshed: ${repoName}")
 }
 
 def performMatchupManifestsStatus(uri, data) {
@@ -2623,6 +2752,7 @@ def prefPkgMatchUpComplete() {
 			minimizeStoredManifests()
 		}
 	}
+	state.fastTrackResults = null
 	state.firstRun = false
 	return dynamicPage(name: "prefPkgMatchUpComplete", title: "", install: true, uninstall: false) {
 		displayHeader(' MatchUp')
@@ -2895,6 +3025,7 @@ def clearStateSettings(clearProgress) {
 	app.removeSetting("pkgInstall")
 	app.removeSetting("appsToInstall")
 	app.removeSetting("driversToInstall")
+	app.removeSetting("bundlesToInstall")
 	app.removeSetting("pkgModify")
 	app.removeSetting("pkgRepair")
 	app.removeSetting("appsToModify")
@@ -2935,9 +3066,7 @@ def clearStateSettings(clearProgress) {
 	state.remove("needsUpdate")
 	state.remove("packageToInstall")
 	state.remove("specificPackageItemsToUpgrade")
-	state.remove("appsToInstall")
 	state.remove("appsToUninstall")
-	state.remove("driversToInstall")
 	state.remove("driversToUninstall")
 	state.remove("packagesWithMatches")
 	state.remove("updateManifest")
@@ -2957,7 +3086,6 @@ def initializeRollbackState(action) {
 	completedActions["fileUpgrades"] = []
 	completedActions["bundleUninstalls"] = []
 	completedActions["bundleInstalls"] = []
-	completedActions["bundleUpgrades"] = []
 }
 
 def getInstalledPackages(onlyWithOptional) {
@@ -3404,8 +3532,7 @@ def login() {
 
 // App installation methods
 def installApp(appCode) {
-	try
-	{
+	try {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/app/save",
@@ -3441,35 +3568,7 @@ def installApp(appCode) {
 	return null
 }
 
-def upgradeApp(id,appCode) {
-	try {
-		def params = [
-			uri: getBaseUrl(),
-			path: "/app/ajax/update",
-			requestContentType: "application/x-www-form-urlencoded",
-			headers: [
-				"Connection": 'keep-alive',
-				"Cookie": state.cookie
-			],
-			body: [
-				id: id,
-				version: getAppVersion(id),
-				source: appCode
-			],
-			timeout: 420,
-			ignoreSSLIssues: true
-		]
-		def result = false
-		httpPost(params) { resp ->
-			result = resp.data.status == "success"
-		}
-		return result
-	}
-	catch (e) {
-		log.error "Error upgrading app: ${e}"
-	}
-	return null
-}
+// def upgradeApp(id,appCode) {} moved to top
 
 def uninstallApp(id) {
 	if (location.hub.firmwareVersionString >= "2.3.8.128") {
@@ -4286,30 +4385,29 @@ def findMatchingAppOrDriver(installedList, item) {
 }
 
 def shouldInstallBeta(item) {
-    def betaObjects = betaObjList()
-		return item.betaLocation != null && betaObjects.contains(item.name)
+	def betaObjects = betaObjList() ?: []
+	return item.betaLocation != null && betaObjects.contains(item.name)
 }
 
 def getItemDownloadLocation(item) {
-    def betaObjects = betaObjList()
+	def betaObjects = betaObjList()
 		if (item.betaLocation != null && betaObjects.contains(item.name))
 			return item.betaLocation 
 	return item.location
 }
 
 def betaObjList() { 
-    def betaObjects = (pkgBetaOn ?: []).toSet()
-    def manifests = state.manifests ?: [:]
-    
-    manifests.each { _, manifest ->
-        if (betaObjects.contains(manifest.packageName)) {
-            [manifest.drivers, manifest.bundles, manifest.apps]
-                .findAll { it }
-                .each { it.each { betaObjects.add(it.name) } }
-        }
-    }
-    
-    return betaObjects.toList()
+	def betaObjects = (pkgBetaOn ?: []).toSet()
+	def manifests = state.manifests ?: [:]
+
+	manifests.each { _, manifest ->
+		if (betaObjects.contains(manifest.packageName)) {
+			[manifest.drivers, manifest.bundles, manifest.apps]
+				.findAll { it }
+		      	.each { it.each { betaObjects.add(it.name) } }
+		}
+	}
+	return betaObjects.toList()
 }
 
 def getItemVersion(item) {
@@ -4439,6 +4537,8 @@ def renderPackageButton(pkg, i) {
 		badges += '<i class="material-icons he-zwave" title="Z-Wave"></i>'
 	if (hasTag(pkg, "Zigbee"))
 		badges += '<i class="material-icons he-zigbee" title="Zigbee"></i>'
+	if (hasTag(pkg, "Matter"))
+		badges += '<i class="material-icons he-matter" title="Matter"></i>'
 	if (hasTag(pkg, "Cloud"))
 		badges += '<i class="material-icons material-icons-outlined" title="Cloud" style="font-size: 14pt">cloud</i>'
 	if (hasTag(pkg, "LAN"))
