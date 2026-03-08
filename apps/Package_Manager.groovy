@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.9
+ *  Hubitat Package Manager v1.9.10
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,7 @@
  *
  *
  *
+ *    mavrrick 1.9.10   Enhanced file processing to allow for a binary file download when new tag is specified and "binary" is used.
  *    csteele  v1.9.9   UpgradeApp() moved to the Top to remediate HPM crashing during Upgrade of itself due to the methods moving post-upgrade.
  *                         Replaced "Fast Search" algorithm to also use fuzzy, thus eliminating the need for two choices. Delete Azure query.
  *                         Created an external Fast-Track Match Up tool. Default on but Optional. 
@@ -58,7 +59,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.9"  }
+	public static String version()      {  return "v1.9.10"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -316,15 +317,14 @@ def prefSettings(params) {
 				}
 				paragraph "In order to automatically install apps and drivers you must specify your Hubitat admin username and password if Hub Security is enabled."
 				input "hpmSecurity", "bool", title: "Hub Security Enabled", submitOnChange: true
-				if (hpmSecurity)
-				{
+				if (hpmSecurity) {
 					input "hpmUsername", "string", title: "Hub Security username", required: true
 					input "hpmPassword", "password", title: "Hub Security password", required: true
 				}
 
 				paragraph "If you have SSL (HTTPS) enabled on your hub, you must enable the option below. If you're not sure, leave the option disabled."
 				input "sslEnabled", "bool", title: "SSL (HTTPS) Enabled", submitOnChange: true
-				
+
 				if (showInstall)
 					paragraph "Please click Done and restart the app to continue."
 			}
@@ -375,8 +375,7 @@ def prefSettings(params) {
 				if (state.customRepositories != null)
 					state.customRepositories.each { r -> reposToShow << ["${r.key}":r.value] }
 				reposToShow = reposToShow.sort { r -> r.value }
-				section ("<b>Repositories</b>")
-				{
+				section ("<b>Repositories</b>") {
 					input "installedRepositories", "enum", title: "Available repositories", options: reposToShow, multiple: true, required: true
 
 					if (state.customRepositories && state.customRepositories.size()) {
@@ -437,9 +436,8 @@ def prefInstallRepositorySearch() {
 	return dynamicPage(name: "prefInstallRepositorySearch", title: "", nextPage: "prefInstallRepositorySearchResults", install: false, uninstall: false) {
 		displayHeader(' Install')
 		section {
-			paragraph "<b>Search</b> by $srchSrcTxt"
+			paragraph "<b>Search</b>"
 			input "pkgSearch", "text", title: "Enter your search criteria", required: true
-			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
 	}
@@ -475,8 +473,8 @@ def prefInstallRepositorySearchResults() {
 		def searchResults = []
 		for (repo in result.data.repositories) {
 			for (packageItem in repo.packages) {
-					def pkg_tags = packageItem.tags[1..-2].tokenize(',')
-					packageItem.tags = pkg_tags
+				def pkg_tags = packageItem.tags[1..-2].tokenize(',')
+				packageItem.tags = pkg_tags
 				packageItem << [author: repo.author, gitHubUrl: repo.gitHubUrl, payPalUrl: repo.payPalUrl, installed: state.manifests[packageItem.location] != null]
 				searchResults << packageItem
 			}
@@ -592,8 +590,7 @@ def prefInstallChoices(params) {
 		section {
 			addCss()
 			paragraph "<b>Install a Package from a Repository</b>"
-			if (installMode == "repository" && params == null)
-			{
+			if (installMode == "repository" && params == null) {
 				//input "pkgCategory", "enum", title: "Choose a category", options: categories, required: true, submitOnChange: true
 				renderTags(allPackages)
 				if(pkgTags) {
@@ -640,8 +637,7 @@ def prefInstallChoices(params) {
 			if (manifest == null) {
 				return buildErrorPage("Invalid Package File", "${pkgInstall} does not appear to be a valid Hubitat Package or does not exist.")
 			}
-			if (state.manifests[pkgInstall] != null)
-			{
+			if (state.manifests[pkgInstall] != null) {
 				return buildErrorPage("Package Already Installed", "${pkgInstall} has already been installed. If you would like to look for upgrades, use the Update function.")
 			}
 
@@ -686,14 +682,12 @@ def getRepoName(location) {
 	return state.repositoryListingJSON.repositories.find { it -> it.location == location }?.name
 }
 
-def performRepositoryRefreshStatus(uri, data)
-{
+def performRepositoryRefreshStatus(uri, data) {
 	def repoName = getRepoName(uri)
 	setBackgroundStatusMessage("Refreshed ${repoName}")
 }
 
-def performRepositoryRefreshComplete(results, data)
-{
+def performRepositoryRefreshComplete(results, data) {
 	allPackages = []
 	categories = []
 
@@ -835,7 +829,7 @@ def performInstallation() {
 			app.updateSetting("pkgBetaOn", curretSetting)
 		}
 	}
-    
+
 	if (shouldInstallBeta(manifest)) {
 		manifest = getJSONFile(getItemDownloadLocation(manifest))
 		manifest.beta = true
@@ -998,16 +992,17 @@ def performInstallation() {
 	}
 
 	for (fileToInstall in manifest.files) {
+		def txType = fileToInstall.transferType
 		def location = getItemDownloadLocation(fileToInstall)
 		def fileContents = fileManagerFiles[location]
 		setBackgroundStatusMessage("Installing ${location}")
-		if (!installFile(fileToInstall.id, fileToInstall.name, fileContents)) {
-			state.manifests.remove(pkgInstall)
-			return rollback("Failed to install file ${location}. Please notify the package developer.", false)
+
+		def fileInstaller = (txType == "binary") ? this.&installFileBinary : this.&installFile
+		if (!fileInstaller(fileToInstall.id, fileToInstall.name, fileContents)) {
+		    return rollback("Failed to install file ${location}. Please notify the package developer.", false)
 		}
-		else
-			completedActions["fileInstalls"] << fileToInstall
-	}
+		completedActions["fileInstalls"] << fileToInstall
+        }
 
 	atomicState.backgroundActionInProgress = false
 	app.updateSetting("installBeta", false)
@@ -1273,8 +1268,7 @@ def performModify() {
 		def location = getItemDownloadLocation(app)
 		setBackgroundStatusMessage("Installing ${app.name}")
 		def id = installApp(appFiles[location])
-		if (id != null)
-		{
+		if (id != null) {
 			app.heID = id
 			completedActions["appInstalls"] << id
 			if (app.oauth)
@@ -1531,14 +1525,17 @@ def performRepair() {
 		}
 
 		for (fileToInstall in manifest.files) {
+			def txType = fileToInstall.transferType
 			def location = getItemDownloadLocation(fileToInstall)
 			def fileContents = fileManagerFiles[location]
 			setBackgroundStatusMessage("Installing ${location}")
-			if (!installFile(fileToInstall.id, fileToInstall.name, fileContents)) {
-				return rollback("Failed to install file ${location}. Please notify the package developer.", false)
+
+			def fileInstaller = (txType == "binary") ? this.&installFileBinary : this.&installFile
+			if (!fileInstaller(fileToInstall.id, fileToInstall.name, fileContents)) {
+			    return rollback("Failed to install file ${location}. Please notify the package developer.", false)
 			}
-			else
-				completedActions["fileInstalls"] << fileToInstall
+			completedActions["fileInstalls"] << fileToInstall
+
 		}
 
 		if (state.manifests[pkgRepair] != null)
@@ -1655,8 +1652,7 @@ def performUninstall() {
 			if (app.heID != null) {
 				def sourceCode = getAppSource(app.heID)
 				setBackgroundStatusMessage("Uninstalling ${app.name}")
-				if (uninstallApp(app.heID))
-				{
+				if (uninstallApp(app.heID)) {
 					completedActions["appUninstalls"] << [id:app.id,source:sourceCode]
 				}
 				else
@@ -1696,12 +1692,12 @@ def performUninstall() {
 				return rollback("Failed to uninstall bundle ${bundle.name}.", false)
 			}
 		}
-        
+
 		if (pkgBetaOn) {
 			app.updateSetting("pkgBetaOn", pkgBetaOn.minus(pkg.packageName))
 			if (pkgBetaOn.isEmpty()) app.updateSetting("includeBetas", false)
 		}
-        
+
 		state.manifests.remove(pkgToUninstall)
 	}
 
@@ -1748,7 +1744,11 @@ def performUpdateCheck() {
 				log.warn "New version of ${manifest.packageName} found but requires ${manifest.minimumHEVersion}, please update your firmware to upgrade."
 				continue
 			}
-			def betaSelected = pkgBetaOn?.contains(state.manifests[pkg.key].packageName)
+			def betaSelected = false
+				if (includesBetas) {
+				betaSelected = pkgBetaOn?.contains(state.manifests[pkg.key].packageName)
+			}
+
 			def newVersionResult = newVersionAvailable(manifest, state.manifests[pkg.key], betaSelected)
 			if (newVersionResult.newVersion) {
 				def version = betaSelected && manifest.betaVersion != null ? manifest.betaVersion : manifest.version
@@ -2393,14 +2393,17 @@ def performUpdates(runInBackground) {
 			}
 
 			for (fileToInstall in manifest.files) {
+				def txType = fileToInstall.transferType
 				def location = getItemDownloadLocation(fileToInstall)
 				def fileContents = fileManagerFiles[location]
 				setBackgroundStatusMessage("Installing ${location}")
-				if (!installFile(fileToInstall.id, fileToInstall.name, fileContents)) {
-					return rollback("Failed to install file ${location}. Please notify the package developer.", false)
+
+				def fileInstaller = (txType == "binary") ? this.&installFileBinary : this.&installFile
+				if (!fileInstaller(fileToInstall.id, fileToInstall.name, fileContents)) {
+				    return rollback("Failed to install file ${location}. Please notify the package developer.", false)
 				}
-				else
-					completedActions["fileInstalls"] << fileToInstall
+				completedActions["fileInstalls"] << fileToInstall
+
 			}
 
 			if (state.manifests[pkg] != null)
@@ -2510,8 +2513,7 @@ def performPackageMatchup() {
 		return
 	}
 	state.matchedPackages = []    // Clear previous matches to ensure a fresh test
-	state.status = "Fast-tracking matchup..."
-		
+
 	def allInstalledApps = getAppList().collect { it ->
 		[
 			id       : it.id.toString(),
@@ -2519,7 +2521,7 @@ def performPackageMatchup() {
 			namespace: it.namespace?.toString() ?: ""
 		]
 	}
-	
+
 	def allInstalledDrivers = getDriverList().collect { it ->
 		[
 			id       : it.id.toString(),
@@ -2527,7 +2529,7 @@ def performPackageMatchup() {
 			namespace: it.namespace?.toString() ?: ""
 		]
 	}
-	
+
 	// Filter out anything that already has an associated package in HPM's state
 	state.manifests.each { uri, manifest ->
 		manifest.apps?.each { app ->
@@ -2541,7 +2543,7 @@ def performPackageMatchup() {
 			}
 		}
 	}
-	
+
 	def postBody = [
 		allInstalledApps: allInstalledApps,
 		allInstalledDrivers: allInstalledDrivers
@@ -2595,7 +2597,7 @@ def performPackageMatchup() {
 				setBackgroundStatusMessage("Matchup complete")
 				atomicState.backgroundActionInProgress = false
 				return 
-			
+
 			} else {
 		        log.warn "HPM: Server returned unexpected data format. Falling back."
 		        standardMatchupFallback()
@@ -2969,8 +2971,7 @@ def checkForUpdates() {
 				app.updateSetting("pkgsToUpdate", packagesWithUpdates)
 				pkgsToUpdate = packagesWithUpdates
 				def result = null
-				try
-				{
+				try {
 					result = performUpdates(true)
 					if (result.success == true) {
 						if (notifyOnSuccess) {
@@ -3022,23 +3023,23 @@ def checkForUpdates() {
 
 def clearStateSettings(clearProgress) {
 	installMode = null
-	app.removeSetting("pkgInstall")
 	app.removeSetting("appsToInstall")
-	app.removeSetting("driversToInstall")
+	app.removeSetting("appsToModify")
 	app.removeSetting("bundlesToInstall")
+	app.removeSetting("driversToInstall")
+	app.removeSetting("driversToModify")
+	app.removeSetting("launchInstaller")
+	app.removeSetting("pkgCategory")
+	app.removeSetting("pkgInstall")
+	app.removeSetting("pkgMatches")
 	app.removeSetting("pkgModify")
 	app.removeSetting("pkgRepair")
-	app.removeSetting("appsToModify")
-	app.removeSetting("driversToModify")
-	app.removeSetting("pkgUninstall")
-	app.removeSetting("pkgsToUpdate")
-	app.removeSetting("pkgsToAddOpt")
-	app.removeSetting("pkgCategory")
-	app.removeSetting("pkgTags")
-	app.removeSetting("pkgMatches")
-	app.removeSetting("pkgUpToDate")
 	app.removeSetting("pkgSearch")
-	app.removeSetting("launchInstaller")
+	app.removeSetting("pkgsToAddOpt")
+	app.removeSetting("pkgsToUpdate")
+	app.removeSetting("pkgTags")
+	app.removeSetting("pkgUninstall")
+	app.removeSetting("pkgUpToDate")
 	packagesWithUpdates = [:]
 	updateDetails = [:]
 	packagesMatchingInstalledEntries = []
@@ -3055,20 +3056,21 @@ def clearStateSettings(clearProgress) {
 	}
 
 	// Things that used to be in state that are not any longer. Clean up
-	state.remove("action")
-	atomicState.remove("statusMessage")
-	atomicState.remove("inProgress")
-	atomicState.remove("errorTitle")
-	atomicState.remove("errorMessage")
-	atomicState.remove("error")
 	atomicState.remove("completedActions")
-	state.remove("releaseNotes")
-	state.remove("needsUpdate")
-	state.remove("packageToInstall")
-	state.remove("specificPackageItemsToUpgrade")
+	atomicState.remove("error")
+	atomicState.remove("errorMessage")
+	atomicState.remove("errorTitle")
+	atomicState.remove("inProgress")
+	atomicState.remove("statusMessage")
+	state.remove("action")
 	state.remove("appsToUninstall")
 	state.remove("driversToUninstall")
+	state.remove("needsUpdate")
 	state.remove("packagesWithMatches")
+	state.remove("packageToInstall")
+	state.remove("releaseNotes")
+	state.remove("status")
+	state.remove("specificPackageItemsToUpgrade")
 	state.remove("updateManifest")
 }
 
@@ -3200,8 +3202,7 @@ def getInstalledOptionalDrivers(manifest) {
 }
 
 def downloadFile(file) {
-	try
-	{
+	try {
 		def params = [
 			uri: file,
 			requestContentType: "application/json",
@@ -3221,9 +3222,36 @@ def downloadFile(file) {
 	}
 }
 
+def downloadFileBinary(file) {
+    logInfo "In new test routine"
+//    def fileName = file.tokenize('/')[-1]
+	try {
+		def params = [
+			uri: file,
+			requestContentType: "application/octet-stream",
+			contentType: "application/octet-stream",
+			timeout: 300
+		]
+		def result = null
+		httpGet(params) { response ->
+            if (response.status == 200) {
+                // The binary data is in response.data
+                byte[] fileBytes = response.data.getBytes()
+
+                result = fileBytes
+            }
+        }
+        logInfo "returning result data"
+		return result
+	}
+	catch (e) {
+		logInfo "Skip download of ${file}: ${e} Please notify the package developer."
+		return null
+	}
+}
+
 def downloadFileAsync(String file, String callback, Map data = null) {
-	try
-	{
+	try {
 		def params = [
 			uri: file,
 			requestContentType: "application/json",
@@ -3240,8 +3268,7 @@ def downloadFileAsync(String file, String callback, Map data = null) {
 
 def downloadFileAsyncCallback(resp, data) {
 	def result = null
-	try
-	{
+	try {
 		if (resp.status >= 200 && resp.status <= 299)
 			result = resp.data
 		else
@@ -3254,8 +3281,7 @@ def downloadFileAsyncCallback(resp, data) {
 }
 
 def getJSONFile(uri) {
-	try
-	{
+	try {
 		def fileContents = downloadFile(uri)
 		return new groovy.json.JsonSlurper().parseText(fileContents)
 	}
@@ -3313,8 +3339,7 @@ def getMultipleJSONFiles(uriList, completeCallback, statusCallback, data = null)
 }
 
 def getJSONFileAsync(String uri, String callback, Map data = null) {
-	try
-	{
+	try{
 		downloadFileAsync(uri, getJSONAsyncResult, [callback: callback, data: data])
 	}
 	catch (e) {
@@ -3324,8 +3349,7 @@ def getJSONFileAsync(String uri, String callback, Map data = null) {
 
 def getJSONAsyncResult(resp, data) {
 	def result = null
-	try
-	{
+	try {
 		result = new groovy.json.JsonSlurper().parseText(resp)
 	}
 	catch (e) {
@@ -3486,11 +3510,9 @@ def isHubSecurityEnabled() {
 }
 
 def login() {
-	if (hpmSecurity)
-	{
+	if (hpmSecurity) {
 		def result = false
-		try
-		{
+		try {
 			httpPost(
 				[
 					uri: getBaseUrl(),
@@ -3510,7 +3532,7 @@ def login() {
 				]
 			)
 			{ resp ->
-			logDebug resp.data?.text
+				logDebug resp.data?.text 
 				if (resp.data?.text?.contains("The login information you supplied was incorrect."))
 					result = false
 				else {
@@ -3519,8 +3541,7 @@ def login() {
 				}
 			}
 		}
-		catch (e)
-		{
+		catch (e) {
 			log.error "Error logging in: ${e}"
 			result = false
 		}
@@ -3592,7 +3613,7 @@ def uninstallApp(id) {
 			log.error "Error uninstalling app ${e}"
 			return false
 		}
-	
+
 	} else {
 		try {
 			def params = [
@@ -3657,8 +3678,7 @@ def enableOAuth(id) {
 }
 
 def getAppSource(id) {
-	try
-	{
+	try {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/app/ajax/code",
@@ -3706,8 +3726,7 @@ def getAppVersion(id) {
 
 // Driver installation methods
 def installDriver(driverCode) {
-	try
-	{
+	try {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/driver/save",
@@ -3743,8 +3762,7 @@ def installDriver(driverCode) {
 }
 
 def upgradeDriver(id,appCode) {
-	try
-	{
+	try {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/driver/ajax/update",
@@ -3795,7 +3813,7 @@ def uninstallDriver(id) {
 			log.error "Error uninstalling app ${e}"
 			return false
 		}
-	
+
 	} else {
 		try {
 			def params = [
@@ -3826,8 +3844,7 @@ def uninstallDriver(id) {
 			}
 			return result
 		}
-		catch (e)
-		{
+		catch (e) {
 			log.error "Error uninstalling driver: ${e}"
 			return false
 		}
@@ -3835,8 +3852,7 @@ def uninstallDriver(id) {
 }
 
 def getDriverSource(id) {
-	try
-	{
+	try {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/driver/ajax/code",
@@ -3885,8 +3901,7 @@ def getDriverVersion(id) {
 // File Installation Methods
 def installFile(id, fileName, contents) {
 	if (location.hub.firmwareVersionString >= "2.3.4.134") {
-	    try
-		{
+	    try {
 	      	uploadHubFile("${fileName}",contents.getBytes("UTF-8"))
 	      	return true
 		}
@@ -3895,8 +3910,7 @@ def installFile(id, fileName, contents) {
 		}
 		return false
 	} else {
-	    try
-		{
+	    try {
 			def params = [
 				uri: getBaseUrl(),
 				path: "/hub/fileManager/upload",
@@ -3922,7 +3936,55 @@ Content-Disposition: form-data; name="folder"
 				ignoreSSLIssues: true
 			]
 			httpPost(params) { resp ->
-	
+
+			}
+			return true
+		}
+		catch (e) {
+			log.error "Error installing file: ${e}"
+		}
+		return false
+	}
+}
+
+def installFileBinary(id, fileName, contents) {
+	if (location.hub.firmwareVersionString >= "2.3.4.134") {
+		try {
+			uploadHubFile("${fileName}",contents)
+			return true
+		}
+		catch (e) {
+			log.error "Error installing file: ${e}"
+		}
+		return false
+	} else {
+		try {
+			def params = [
+				uri: getBaseUrl(),
+				path: "/hub/fileManager/upload",
+				query: [
+					"folder": "/"
+				],
+				headers: [
+					"Cookie": state.cookie,
+					"Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryDtoO2QfPwfhTjOuS"
+				],
+				body: """------WebKitFormBoundaryDtoO2QfPwfhTjOuS
+Content-Disposition: form-data; name="uploadFile"; filename="${fileName}"
+Content-Type: text/html
+
+${contents}
+
+------WebKitFormBoundaryDtoO2QfPwfhTjOuS
+Content-Disposition: form-data; name="folder"
+
+
+------WebKitFormBoundaryDtoO2QfPwfhTjOuS--""",
+				timeout: 300,
+				ignoreSSLIssues: true
+			]
+			httpPost(params) { resp ->
+
 			}
 			return true
 		}
@@ -3935,8 +3997,7 @@ Content-Disposition: form-data; name="folder"
 
 def uninstallFile(id, fileName) {
 	if (location.hub.firmwareVersionString >= "2.3.4.134") {
-	    try
-		{
+	    try {
 	      	deleteHubFile("${fileName}")
 	      	return true
 		}
@@ -3945,8 +4006,7 @@ def uninstallFile(id, fileName) {
 		}
 		return false
 	} else {
-	    try
-		{
+	    try {
 			def params = [
 				uri: getBaseUrl(),
 				path: "/hub/fileManager/delete",
@@ -3977,8 +4037,7 @@ def uninstallFile(id, fileName) {
 // Bundle Installation Methods
 def installBundle(bundleLocation, bundlePrimary=false) {
 	if (location.hub.firmwareVersionString >= "2.3.8.108") {
-		try
-		{
+		try {
 			def params = [
 				uri: "${getBaseUrl()}/bundle2/uploadZipFromUrl?url=${URLEncoder.encode(bundleLocation, "UTF-8")}&pwd=&private=$bundlePrimary",
 	 			headers: [
@@ -3988,6 +4047,7 @@ def installBundle(bundleLocation, bundlePrimary=false) {
 	 			timeout: 300,
 				ignoreSSLIssues: true
 			]
+
 			httpGet(params) { resp ->
 				result = resp.data.success
 			}
@@ -3999,8 +4059,7 @@ def installBundle(bundleLocation, bundlePrimary=false) {
 		return false
 
 	} else {
-		try
-		{
+		try {
       	  def params = [
       	      uri: getBaseUrl(),
       	      path: "/bundle/uploadZipFromUrl",
@@ -4019,7 +4078,7 @@ def installBundle(bundleLocation, bundlePrimary=false) {
       	      ignoreSSLIssues: true
       	  ]
 			httpPost(params) { resp ->
-	
+
       	  }
 			return true
 		}
@@ -4089,6 +4148,7 @@ def uninstallBundle(bundleName) {
 				timeout: 300,
 				ignoreSSLIssues: true
 			]
+
 			httpGet(params) { resp ->
 				result = resp.data.success
 			}
@@ -4114,7 +4174,7 @@ def uninstallBundle(bundleName) {
 				ignoreSSLIssues: true
 			]
 			httpGet(params) { resp ->
-	
+
 			}
 			return true
 		}
@@ -4359,12 +4419,18 @@ def minimizeStoredManifests() {
 def downloadFileManagerFiles(manifest) {
 	def files = [:]
 	for (fileToInstall in manifest.files) {
+		def txType = fileToInstall.transferType
 		def location = getItemDownloadLocation(fileToInstall)
 		setBackgroundStatusMessage("Downloading ${location}")
-		def fileContents = downloadFile(location)
-		if (fileContents == null) {
-			return [sucess:false, name: location]
-		}
+		def fileContents = null
+
+		boolean isBinary = (txType == "binary")
+
+		fileContents = isBinary  ? downloadFileBinary(location) : downloadFile(location)
+
+		if (!isBinary && fileContents == null) {  return [sucess:false, name: location] }
+
+
 		files[location] = fileContents
 	}
 	return [success:true, files: files]
