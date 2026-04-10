@@ -106,6 +106,7 @@ preferences {
 	page(name: "prefPkgUnMatch")
 	page(name: "prefPkgUnMatchVerify")
 	page(name: "prefPkgUnMatchComplete")
+	page(name: "prefPkgViewUnmanaged")
 }
 
 import groovy.transform.Field
@@ -278,6 +279,7 @@ def prefOptions() {
 			href(name: "prefPkgUninstall", title: "Uninstall", required: false, page: "prefPkgUninstall", description: "Uninstall packages.")
 			href(name: "prefPkgMatchUp", title: "Match Up", required: false, page: "prefPkgMatchUp", description: "Match up the apps and drivers you already have installed with packages available so that you can use the package manager to get future updates.")
 			href(name: "prefPkgView", title: "View Apps and Drivers", required: false, page: "prefPkgView", description: "View the apps and drivers that are managed by packages.")
+			href(name: "prefPkgViewUnmanaged", title: "View Unmanaged Apps and Drivers", required: false, page: "prefPkgViewUnmanaged", description: "View local apps and drivers NOT managed by any HPM package.")
 			href(name: "prefSettings", title: "Package Manager Settings", required: false, page: "prefSettings", params: [force:true], description: "Modify Hubitat Package Manager Settings.")
 		}
 		displayFooter()
@@ -2913,6 +2915,72 @@ def prefPkgView() {
 	}
 }
 
+def prefPkgViewUnmanaged() {
+    if (state.mainMenu)
+        return prefOptions()
+    logDebug "prefPkgViewUnmanaged"
+
+    if (!login()) {
+        return buildErrorPage("Authentication Error", "Could not log in to the hub. Please verify Hub Security settings.")
+    }
+
+    def hubIP   = location.hub.localIP
+    def proto   = sslEnabled ? "https" : "http"
+    def baseUrl = "${proto}://${hubIP}"
+
+    def unmanaged = getUnmanagedItems()
+
+    return dynamicPage(name: "prefPkgViewUnmanaged", title: "", install: false, uninstall: false) {
+        displayHeader(' Unmanaged Items')
+
+        section("<b>Local Apps NOT managed by HPM</b>") {
+            if (unmanaged.apps?.size() > 0) {
+                def appStr = "<ul>"
+                unmanaged.apps.each { app ->
+                    appStr += "<li><b>${app.title}</b>"
+                    if (app.namespace) appStr += " <i>(${app.namespace})</i>"
+                    appStr += "<br>&nbsp;&nbsp;"
+                    appStr += "<a href='${baseUrl}/app/editor/${app.id}' target='_blank'>View Code</a>"
+                    if (app.importUrl)         appStr += " | <a href='${app.importUrl}' target='_blank'>Source</a>"
+                    if (app.documentationLink) appStr += " | <a href='${app.documentationLink}' target='_blank'>Documentation</a>"
+                    if (app.communityLink)     appStr += " | <a href='${app.communityLink}' target='_blank'>Community Thread</a>"
+                    appStr += "</li>"
+                }
+                appStr += "</ul>"
+                paragraph appStr
+            } else {
+                paragraph "All installed apps are managed by HPM, or none were found."
+            }
+        }
+
+        section("<b>Local Drivers NOT managed by HPM</b>") {
+            if (unmanaged.drivers?.size() > 0) {
+                def driverStr = "<ul>"
+                unmanaged.drivers.each { driver ->
+                    driverStr += "<li><b>${driver.title}</b>"
+                    if (driver.namespace) driverStr += " <i>(${driver.namespace})</i>"
+                    driverStr += "<br>&nbsp;&nbsp;"
+                    driverStr += "<a href='${baseUrl}/driver/editor/${driver.id}' target='_blank'>View Code</a>"
+                    if (driver.importUrl)         driverStr += " | <a href='${driver.importUrl}' target='_blank'>Source</a>"
+                    if (driver.documentationLink) driverStr += " | <a href='${driver.documentationLink}' target='_blank'>Documentation</a>"
+                    if (driver.communityLink)     driverStr += " | <a href='${driver.communityLink}' target='_blank'>Community Thread</a>"
+                    driverStr += "</li>"
+                }
+                driverStr += "</ul>"
+                paragraph driverStr
+            } else {
+                paragraph "All installed drivers are managed by HPM, or none were found."
+            }
+        }
+
+        section {
+            paragraph "<hr>"
+            input "btnMainMenu", "button", title: "Main Menu", width: 3
+        }
+        displayFooter()
+    }
+}
+
 def buildErrorPage(title, message) {
 	return dynamicPage(name: "prefError", title: "", install: true, uninstall: false) {
 		displayHeader()
@@ -3098,6 +3166,56 @@ def getInstalledPackages(onlyWithOptional) {
 	}
 	pkgsToList = pkgsToList.sort { it -> it.value }
 	return pkgsToList
+}
+
+def getUnmanagedItems() {
+    def managedAppHeIDs    = [] as Set
+    def managedDriverHeIDs = [] as Set
+
+    state.manifests?.each { manifestUrl, manifest ->
+        manifest?.apps?.each    { app    -> if (app?.heID != null) managedAppHeIDs    << app.heID.toString() }
+        manifest?.drivers?.each { driver -> if (driver?.heID != null) managedDriverHeIDs << driver.heID.toString() }
+    }
+
+    def allApps    = getAppList()
+    def allDrivers = getDriverList()
+
+    def unmanagedApps    = allApps?.findAll    { !(it.id?.toString() in managedAppHeIDs) }?.sort { it.title } ?: []
+    def unmanagedDrivers = allDrivers?.findAll { !(it.id?.toString() in managedDriverHeIDs) }?.sort { it.title } ?: []
+
+    unmanagedApps = unmanagedApps.collect { app ->
+        def details = getItemDetails("app", app.id)
+        app + details
+    }
+    unmanagedDrivers = unmanagedDrivers.collect { driver ->
+        def details = getItemDetails("driver", driver.id)
+        driver + details
+    }
+
+    return [apps: unmanagedApps, drivers: unmanagedDrivers]
+}
+
+def getItemDetails(String type, id) {
+    try {
+        def params = [
+            uri: getBaseUrl(),
+            path: "/${type}/ajax/code",
+            query: [id: id],
+            headers: ["Cookie": state.cookie],
+            ignoreSSLIssues: true
+        ]
+        def result = [:]
+        httpGet(params) { resp ->
+            result.importUrl         = resp.data?.importUrl         ?: ""
+            result.documentationLink = resp.data?.documentationLink ?: ""
+            result.communityLink     = resp.data?.communityLink     ?: ""
+        }
+        return result
+    }
+    catch (e) {
+        logDebug "getItemDetails error for ${type} ${id}: ${e}"
+        return [importUrl: "", documentationLink: "", communityLink: ""]
+    }
 }
 
 def isAppInstalled(manifest, id) {
