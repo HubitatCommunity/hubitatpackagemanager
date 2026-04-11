@@ -279,7 +279,7 @@ def prefOptions() {
 			href(name: "prefPkgUninstall", title: "Uninstall", required: false, page: "prefPkgUninstall", description: "Uninstall packages.")
 			href(name: "prefPkgMatchUp", title: "Match Up", required: false, page: "prefPkgMatchUp", description: "Match up the apps and drivers you already have installed with packages available so that you can use the package manager to get future updates.")
 			href(name: "prefPkgView", title: "View Apps and Drivers", required: false, page: "prefPkgView", description: "View the apps and drivers that are managed by packages.")
-			href(name: "prefPkgViewUnmanaged", title: "View Unmanaged Apps and Drivers", required: false, page: "prefPkgViewUnmanaged", description: "View local apps and drivers NOT managed by any HPM package.")
+			href(name: "prefPkgViewUnmanaged", title: "View Manually Installed Apps and Drivers", required: false, page: "prefPkgViewUnmanaged", description: "View local, manually installed apps and drivers NOT managed by any HPM package.")
 			href(name: "prefSettings", title: "Package Manager Settings", required: false, page: "prefSettings", params: [force:true], description: "Modify Hubitat Package Manager Settings.")
 		}
 		displayFooter()
@@ -2931,45 +2931,63 @@ def prefPkgViewUnmanaged() {
     def unmanaged = getUnmanagedItems()
 
     return dynamicPage(name: "prefPkgViewUnmanaged", title: "", install: false, uninstall: false) {
-        displayHeader(' Unmanaged Items')
+        section(getFormat("title", "Manually Installed Items")) {
+            paragraph "<div style='color:#1A77C9;text-align:right;font-weight:small;font-size:9px;'>Developed by: DCMeglio<br/>Current Version: ${version()} -  ${thisCopyright}</div>"
+            paragraph "\n<hr style='background-color:#1A77C9; height: 1px; border: 0;'></hr>"
+        }
 
-        section("<b>Local Apps NOT managed by HPM</b>") {
+        section("<b>Manually Installed Apps</b>") {
             if (unmanaged.apps?.size() > 0) {
                 def appStr = "<ul>"
                 unmanaged.apps.each { app ->
                     appStr += "<li><b>${app.title}</b>"
-                    if (app.namespace) appStr += " <i>(${app.namespace})</i>"
-                    appStr += "<br>&nbsp;&nbsp;"
-                    appStr += "<a href='${baseUrl}/app/editor/${app.id}' target='_blank'>View Code</a>"
+                    if (app.namespace)          appStr += " <i>(${app.namespace})</i>"
+                    if (app.oauth == "enabled") appStr += " <small>[OAuth]</small>"
+                    appStr += " <a href='${baseUrl}/app/editor/${app.id}' target='_blank'>View Code</a>"
                     if (app.importUrl)         appStr += " | <a href='${app.importUrl}' target='_blank'>Source</a>"
                     if (app.documentationLink) appStr += " | <a href='${app.documentationLink}' target='_blank'>Documentation</a>"
                     if (app.communityLink)     appStr += " | <a href='${app.communityLink}' target='_blank'>Community Thread</a>"
-                    appStr += "</li>"
+                    if (app.lastModified) appStr += "<br>Modified: ${timeAgo(app.lastModified)} ago"
+                    if (app.usedBy?.size() > 0) {
+                        appStr += "<br>Used by:<ul>"
+                        app.usedBy.each { appStr += "<li>${it.name}</li>" }
+                        appStr += "</ul>"
+                    } else {
+                        appStr += "<br><span style='color:orange'>Unused</span>"
+                    }
+                    appStr += "</li><br>"
                 }
                 appStr += "</ul>"
                 paragraph appStr
             } else {
-                paragraph "All installed apps are managed by HPM, or none were found."
+                paragraph "No manually installed apps were found."
             }
         }
 
-        section("<b>Local Drivers NOT managed by HPM</b>") {
+        section("<b>Manually Installed Drivers</b>") {
             if (unmanaged.drivers?.size() > 0) {
                 def driverStr = "<ul>"
                 unmanaged.drivers.each { driver ->
                     driverStr += "<li><b>${driver.title}</b>"
                     if (driver.namespace) driverStr += " <i>(${driver.namespace})</i>"
-                    driverStr += "<br>&nbsp;&nbsp;"
-                    driverStr += "<a href='${baseUrl}/driver/editor/${driver.id}' target='_blank'>View Code</a>"
-                    if (driver.importUrl)         driverStr += " | <a href='${driver.importUrl}' target='_blank'>Source</a>"
+                    driverStr += " <a href='${baseUrl}/driver/editor/${driver.id}' target='_blank'>View Code</a>"
+					if (driver.importUrl)         driverStr += " | <a href='${driver.importUrl}' target='_blank'>Source</a>"
                     if (driver.documentationLink) driverStr += " | <a href='${driver.documentationLink}' target='_blank'>Documentation</a>"
                     if (driver.communityLink)     driverStr += " | <a href='${driver.communityLink}' target='_blank'>Community Thread</a>"
-                    driverStr += "</li>"
+                    if (driver.lastModified) driverStr += "<br>Modified: ${timeAgo(driver.lastModified)} ago"
+					if (driver.usedBy?.size() > 0) {
+                        driverStr += "<br>Used by:<ul>"
+                        driver.usedBy.each { driverStr += "<li>${it.name}</li>" }
+                        driverStr += "</ul>"
+                    } else {
+                        driverStr += "<br><span style='color:orange'>Unused</span>"
+                    }
+                    driverStr += "</li><br>"
                 }
                 driverStr += "</ul>"
                 paragraph driverStr
             } else {
-                paragraph "All installed drivers are managed by HPM, or none were found."
+                paragraph "No manually installed drivers were found."
             }
         }
 
@@ -3197,24 +3215,40 @@ def getUnmanagedItems() {
 
 def getItemDetails(String type, id) {
     try {
-        def params = [
-            uri: getBaseUrl(),
-            path: "/${type}/ajax/code",
-            query: [id: id],
-            headers: ["Cookie": state.cookie],
-            ignoreSSLIssues: true
-        ]
-        def result = [:]
-        httpGet(params) { resp ->
-            result.importUrl         = resp.data?.importUrl         ?: ""
-            result.documentationLink = resp.data?.documentationLink ?: ""
-            result.communityLink     = resp.data?.communityLink     ?: ""
+        def source = (type == "app") ? getAppSource(id) : getDriverSource(id)
+        def result = [importUrl: "", documentationLink: "", communityLink: ""]
+        if (source) {
+            def importUrlMatch         = source =~ /importUrl\s*:\s*["']([^"']+)["']/
+            def documentationLinkMatch = source =~ /documentationLink\s*:\s*["']([^"']+)["']/
+            def communityLinkMatch     = source =~ /communityLink\s*:\s*["']([^"']+)["']/
+            if (importUrlMatch)         result.importUrl         = importUrlMatch[0][1]
+            if (documentationLinkMatch) result.documentationLink = documentationLinkMatch[0][1]
+            if (communityLinkMatch)     result.communityLink     = communityLinkMatch[0][1]
         }
         return result
     }
     catch (e) {
         logDebug "getItemDetails error for ${type} ${id}: ${e}"
         return [importUrl: "", documentationLink: "", communityLink: ""]
+    }
+}
+
+def timeAgo(String isoDate) {
+    try {
+        def date = Date.parse("yyyy-MM-dd'T'HH:mm:ssZ", isoDate.replace('+0000', '+0000'))
+        def now = new Date()
+        def days = (now.time - date.time) / (1000 * 60 * 60 * 24) as int
+        def years = days.intdiv(365)
+        def months = (days % 365).intdiv(30)
+        def remDays = (days % 365) % 30
+        def parts = []
+        if (years)  parts << "${years}y"
+        if (months) parts << "${months}m"
+        if (remDays || parts.isEmpty()) parts << "${remDays}d"
+        return parts.join(" ")
+    }
+    catch (e) {
+        return isoDate
     }
 }
 
@@ -4641,7 +4675,16 @@ def getDriverList() {
 
 		try {
 			httpGet(params) { resp ->
-			resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace]} 
+				resp.data.each {
+					result += [
+						id          : it.id.toString(),
+						title       : it.name,
+						namespace   : it.namespace,
+						capabilities: it.capabilities ?: "",
+						lastModified: it.lastModified ?: "",
+						usedBy      : it.usedBy ?: []
+					]
+				}
 			}
 		} catch (e) {
 			log.error "Error retrieving installed drivers: ${e}"
@@ -4662,7 +4705,7 @@ def getDriverList() {
 			httpGet(params) { resp ->
 				for (driver in resp.data.drivers) {
 					if (driver.type == "usr")
-						result += [id:driver.id.toString(),title:driver.name,namespace:driver.namespace]
+					result += [id:driver.id.toString(), title:driver.name, namespace:driver.namespace, capabilities:"", lastModified:"", usedBy:[]]
 				}
 			}
 		} catch (e) {
@@ -4828,9 +4871,17 @@ def getAppList() {
 
 		try {
 			httpGet(params) { resp ->
-				resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace]} 
-			}				
-
+				resp.data.each {
+					result += [
+						id          : it.id.toString(),
+						title       : it.name,
+						namespace   : it.namespace,
+						oauth       : it.oauth ?: "",
+						lastModified: it.lastModified ?: "",
+						usedBy      : it.usedBy ?: []
+					]
+				}
+			}
 		} catch (e) {
 			log.error "Error retrieving installed apps: ${e}"
 		} 
@@ -4855,7 +4906,7 @@ def getAppList() {
 					def id = it.find(/data-app-id="([^"]+)"/) { match,i -> return i.trim() }
 					def title = allFields[0].find(/title="([^"]+)/) { match,t -> return t.trim() }
 					def namespace = allFields[1].find(/>([^"]+)</) { match,ns -> return ns.trim() }
-					result += [id:id,title:title,namespace:namespace]
+					result += [id:id, title:title, namespace:namespace, oauth:"", lastModified:"", usedBy:[]]
 				}
 			}
 
