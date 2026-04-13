@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.10
+ *  Hubitat Package Manager v1.9.11
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,7 +9,8 @@
  *
  *
  *
- *    mavrrick 1.9.10   Enhanced file processing to allow for a binary file download when new tag is specified and "binary" is used.
+ *    csteele v1.9.11   Borrowing from a PR by neeravmodi, added a list of Apps and Drivers that are not managed by HPM.
+ *    mavrrick 1.9.10   Enhanced file processing to allow for a binary file download when new tag is specified and 'binary' is used.
  *    csteele  v1.9.9   UpgradeApp() moved to the Top to remediate HPM crashing during Upgrade of itself due to the methods moving post-upgrade.
  *                         Replaced "Fast Search" algorithm to also use fuzzy, thus eliminating the need for two choices. Delete Azure query.
  *                         Created an external Fast-Track Match Up tool. Default on but Optional. 
@@ -59,7 +60,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.10"  }
+	public static String version()      {  return "v1.9.11"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -106,6 +107,7 @@ preferences {
 	page(name: "prefPkgUnMatch")
 	page(name: "prefPkgUnMatchVerify")
 	page(name: "prefPkgUnMatchComplete")
+	page(name: "prefPkgViewUnmanaged")
 }
 
 import groovy.transform.Field
@@ -213,6 +215,9 @@ def appButtonHandler(btn) {
 		case "btnUnMatch":
 			state.UnMatch = true
 			break
+		case "btnPkgUnmanaged":
+			state.UnManaged = true
+			break
 		case ~/^btnDeleteRepo(\d+)/:
 			deleteCustomRepository(Matcher.lastMatcher[0][1].toInteger())
 			break
@@ -287,6 +292,7 @@ def prefOptions() {
 def prefSettings(params) {
 	if (state.UnMatch)
 		return prefPkgUnMatch()
+
 	def showSettingsForSecurityEnablement = false
 	state.newRepoMessage = ""
 	if (state.manifests == null)
@@ -2215,6 +2221,7 @@ def performUpdates(runInBackground) {
 			}
 			if (pkg == state.repositoryListingJSON.hpm?.location)
 				sendLocationEvent(name: "hpmVersion", value: manifest.version)
+				logDebug "HPM upgraded this cycle."
 		}
 		else {
 			resultData.success = false
@@ -2856,6 +2863,8 @@ def prefPkgUnMatchComplete() {
 def prefPkgView() {
 	if (state.mainMenu)
 		return prefOptions()
+	if (state.UnManaged) 
+		return prefPkgViewUnmanaged()
 	logDebug "prefPkgView"
 
 	def appsManaged = []
@@ -2908,9 +2917,73 @@ def prefPkgView() {
 		}
 		section {
 			paragraph "<hr>"
+			input "btnPkgUnmanaged", "button", title: "List Unmanaged Packages", width: 3
+		}
+		section {
+			paragraph "<hr>"
 			input "btnMainMenu", "button", title: "Main Menu", width: 3
 		}
 	}
+}
+
+def prefPkgViewUnmanaged() {
+	if (state.mainMenu)
+		return prefOptions()
+	logDebug "prefPkgViewUnmanaged"
+	state.remove("UnManaged")
+
+	def unmanaged = getUnmanagedItems()
+	def str = "<ul>"
+	if (unmanaged.apps?.size() > 0) {
+		unmanaged.apps.each { app ->
+			str += "<li>${app.title}"
+			str += "</li>"
+		}
+	}
+	str += "</ul>"
+	unManApps = str
+
+	str = "<ul>"
+	if (unmanaged.drivers?.size() > 0) {
+		unmanaged.drivers.each { driver ->
+			str += "<li>${driver.title}"
+			str += "</li>"
+		}
+	}
+	str += "</ul>"
+
+	return dynamicPage(name: "prefPkgViewUnmanaged", title: "", install: true, uninstall: false) {
+		displayHeader(' View')
+		section {
+			paragraph "<b>View Unmanaged Apps and Drivers</b>"
+			paragraph "View local, manually installed apps and drivers NOT managed by any HPM package."
+			paragraph "<b>Manually Installed Apps</b>"
+			paragraph unManApps
+			paragraph "<b>Manually Installed Drivers</b>"
+			paragraph str
+		}
+		section {
+			paragraph "<hr>"
+			input "btnMainMenu", "button", title: "Main Menu", width: 3
+		}
+	}
+}
+
+def getUnmanagedItems() {
+	def managedAppHeIDs    = [] as Set
+	def managedDriverHeIDs = [] as Set
+	
+	state.manifests?.each { manifestUrl, manifest ->
+	    manifest?.apps?.each    { app    -> if (app?.heID != null) managedAppHeIDs    << app.heID.toString() }
+	    manifest?.drivers?.each { driver -> if (driver?.heID != null) managedDriverHeIDs << driver.heID.toString() }
+	}
+	
+	def allApps    = getAppList()
+	def allDrivers = getDriverList()
+	def unmanagedApps    = allApps?.findAll    { !(it.id?.toString() in managedAppHeIDs) }?.sort { it.title } ?: []
+	def unmanagedDrivers = allDrivers?.findAll { !(it.id?.toString() in managedDriverHeIDs) }?.sort { it.title } ?: []
+	
+	return [apps: unmanagedApps, drivers: unmanagedDrivers]
 }
 
 def buildErrorPage(title, message) {
@@ -3421,6 +3494,7 @@ def getInstalledManifest(pkgId) {
 }
 
 def verifyHEVersion(versionStr) {
+	if (versionStr.size() <1) return false
 	def installedVersionParts = location.hub.firmwareVersionString.split(/\./)
 	def requiredVersionParts = versionStr.split(/\./)
 
