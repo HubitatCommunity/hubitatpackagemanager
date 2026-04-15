@@ -2597,6 +2597,8 @@ def performPackageMatchup() {
 				// Move status updates OUTSIDE the for loop
 				state.fastTrackResults = packagesMatchingInstalledEntries
 				setBackgroundStatusMessage("Matchup complete")
+				state.unmanagedApps    = allInstalledApps.collect    { [id: it.id, title: it.title, namespace: it.namespace] }
+				state.unmanagedDrivers = allInstalledDrivers.collect { [id: it.id, title: it.title, namespace: it.namespace] }
 				atomicState.backgroundActionInProgress = false
 				return 
 
@@ -2713,6 +2715,8 @@ def performMatchupManifestsComplete(results, data) {
 		}
 	}
 
+	state.unmanagedApps    = allInstalledApps.collect    { [id: it.id, title: it.title, namespace: it.namespace] }
+	state.unmanagedDrivers = allInstalledDrivers.collect { [id: it.id, title: it.title, namespace: it.namespace] }
 	atomicState.backgroundActionInProgress = false
 }
 
@@ -2947,6 +2951,7 @@ def prefPkgViewUnmanaged() {
                     if (app.importUrl)         appStr += " | <a href='${app.importUrl}' target='_blank'>Source</a>"
                     if (app.documentationLink) appStr += " | <a href='${app.documentationLink}' target='_blank'>Documentation</a>"
                     if (app.communityLink)     appStr += " | <a href='${app.communityLink}' target='_blank'>Community Thread</a>"
+                    if (app.bundleName)        appStr += "<br>Bundle: ${app.bundleName}"
                     if (app.lastModified) appStr += "<br>Modified: ${timeAgo(app.lastModified)} ago"
                     if (app.usedBy?.size() > 0) {
                         appStr += "<br>Used by:<ul>"
@@ -2974,6 +2979,7 @@ def prefPkgViewUnmanaged() {
 					if (driver.importUrl)         driverStr += " | <a href='${driver.importUrl}' target='_blank'>Source</a>"
                     if (driver.documentationLink) driverStr += " | <a href='${driver.documentationLink}' target='_blank'>Documentation</a>"
                     if (driver.communityLink)     driverStr += " | <a href='${driver.communityLink}' target='_blank'>Community Thread</a>"
+                    if (driver.bundleName)        driverStr += "<br>Bundle: ${driver.bundleName}"
                     if (driver.lastModified) driverStr += "<br>Modified: ${timeAgo(driver.lastModified)} ago"
 					if (driver.usedBy?.size() > 0) {
                         driverStr += "<br>Used by:<ul>"
@@ -3187,27 +3193,26 @@ def getInstalledPackages(onlyWithOptional) {
 }
 
 def getUnmanagedItems() {
-    def managedAppHeIDs    = [] as Set
-    def managedDriverHeIDs = [] as Set
-
-    state.manifests?.each { manifestUrl, manifest ->
-        manifest?.apps?.each    { app    -> if (app?.heID != null) managedAppHeIDs    << app.heID.toString() }
-        manifest?.drivers?.each { driver -> if (driver?.heID != null) managedDriverHeIDs << driver.heID.toString() }
-    }
+    def unmanagedApps    = state.unmanagedApps    ?: []
+    def unmanagedDrivers = state.unmanagedDrivers ?: []
 
     def allApps    = getAppList()
     def allDrivers = getDriverList()
+    def bundleMap  = getBundleMap()
 
-    def unmanagedApps    = allApps?.findAll    { !(it.id?.toString() in managedAppHeIDs) }?.sort { it.title } ?: []
-    def unmanagedDrivers = allDrivers?.findAll { !(it.id?.toString() in managedDriverHeIDs) }?.sort { it.title } ?: []
-
-    unmanagedApps = unmanagedApps.collect { app ->
-        def details = getItemDetails("app", app.id)
-        app + details
+    unmanagedApps = unmanagedApps.collect { item ->
+        def full    = allApps.find    { it.id == item.id } ?: item
+        def details = getItemDetails("app", item.id)
+        def result  = full + details
+        if (bundleMap[result.title]) result.bundleName = bundleMap[result.title]
+        result
     }
-    unmanagedDrivers = unmanagedDrivers.collect { driver ->
-        def details = getItemDetails("driver", driver.id)
-        driver + details
+    unmanagedDrivers = unmanagedDrivers.collect { item ->
+        def full    = allDrivers.find { it.id == item.id } ?: item
+        def details = getItemDetails("driver", item.id)
+        def result  = full + details
+        if (bundleMap[result.title]) result.bundleName = bundleMap[result.title]
+        result
     }
 
     return [apps: unmanagedApps, drivers: unmanagedDrivers]
@@ -3231,6 +3236,39 @@ def getItemDetails(String type, id) {
         logDebug "getItemDetails error for ${type} ${id}: ${e}"
         return [importUrl: "", documentationLink: "", communityLink: ""]
     }
+}
+
+def getBundleMap() {
+    def bundleMap = [:]
+    try {
+        def params = [
+            uri: getBaseUrl(),
+            path: "/hub2/userBundles",
+            headers: [ Cookie: state.cookie ],
+            ignoreSSLIssues: true
+        ]
+        httpGet(params) { resp ->
+            resp.data.each { bundle ->
+                def content = bundle.content ?: ""
+                def appsMatch    = content =~ /apps \[([^\]]*)\]/
+                def driversMatch = content =~ /drivers \[([^\]]*)\]/
+                if (appsMatch && appsMatch[0][1]) {
+                    appsMatch[0][1].split(", ").each { name ->
+                        if (name.trim()) bundleMap[name.trim()] = bundle.name
+                    }
+                }
+                if (driversMatch && driversMatch[0][1]) {
+                    driversMatch[0][1].split(", ").each { name ->
+                        if (name.trim()) bundleMap[name.trim()] = bundle.name
+                    }
+                }
+            }
+        }
+    }
+    catch (e) {
+        logDebug "getBundleMap error: ${e}"
+    }
+    return bundleMap
 }
 
 def timeAgo(String isoDate) {
