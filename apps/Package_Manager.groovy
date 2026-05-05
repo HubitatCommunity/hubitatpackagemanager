@@ -1751,7 +1751,7 @@ def performUpdateCheck() {
 				continue
 			}
 			def betaSelected = false
-				if (includesBetas) {
+				if (includeBetas) {
 				betaSelected = pkgBetaOn?.contains(state.manifests[pkg.key].packageName)
 			}
 
