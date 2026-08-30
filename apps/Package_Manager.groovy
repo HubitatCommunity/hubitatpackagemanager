@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.11
+ *  Hubitat Package Manager v1.9.12
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,12 @@
  *
  *
  *
+ *    jono     v1.9.12   During update, self-heal stale/removed app & driver heIDs cached in state.manifests
+ *                         (e.g. left behind after a driver was deleted/reinstalled on the hub, or removed
+ *                         entirely outside of HPM) instead of crashing with "Stream closed" and rolling
+ *                         back the whole update; look up the current heID by name, or mark the item as
+ *                         not installed if it's genuinely gone. Fixed a rollback NPE caused by
+ *                         completedActions["bundleInstalls"] tracking the wrong variable.
  *    csteele v1.9.11   Borrowing from a PR by neeravmodi, added a list of Apps and Drivers that are not managed by HPM.
  *    mavrrick 1.9.10   Enhanced file processing to allow for a binary file download when new tag is specified and 'binary' is used.
  *    csteele  v1.9.9   UpgradeApp() moved to the Top to remediate HPM crashing during Upgrade of itself due to the methods moving post-upgrade.
@@ -60,7 +66,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.11"  }
+	public static String version()      {  return "v1.9.12"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -148,7 +154,7 @@ import java.util.regex.Matcher
 
 // method moved to the Top to possibly remediate HPM crashing during Upgrade of itself.
 def upgradeApp(id,appCode) {
-	try {
+	return withHttpRetry("Error upgrading app", 2, 1000) {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/app/ajax/update",
@@ -168,13 +174,13 @@ def upgradeApp(id,appCode) {
 		def result = false
 		httpPost(params) { resp ->
 			result = resp.data.status == "success"
+			if (!result) {
+				try { log.error "Error upgrading app ${id}: server responded with non-success status, full response: ${resp.data}" } catch (ignored) {}
+				recordLastUpgradeError("Error upgrading app ${id}: non-success status, full response: ${resp.data}")
+			}
 		}
-		return result
+		result
 	}
-	catch (e) {
-		log.error "Error upgrading app: ${e}"
-	}
-	return null
 }
 
 def installed() {
@@ -1481,7 +1487,7 @@ def performRepair() {
 				def sourceCode = getAppSource(app.heID)
 				setBackgroundStatusMessage("Reinstalling ${app.name}")
 				if (upgradeApp(app.heID, appFiles[location])) {
-					completedActions["appUpgrades"] << [id:app.heID,source:sourceCode]
+					completedActions["appUpgrades"] << [heID:app.heID,source:sourceCode]
 					if (app.oauth)
 						enableOAuth(app.heID)
 				}
@@ -1512,7 +1518,7 @@ def performRepair() {
 				def sourceCode = getDriverSource(driver.heID)
 				setBackgroundStatusMessage("Reinstalling ${driver.name}")
 				if (upgradeDriver(driver.heID, driverFiles[location])) {
-					completedActions["driverUpgrades"] << [id:driver.heID,source:sourceCode]
+					completedActions["driverUpgrades"] << [heID:driver.heID,source:sourceCode]
 				}
 				else
 					return rollback("Failed to upgrade driver ${location}.  Please notify the package developer.", runInBackground)
@@ -1751,7 +1757,7 @@ def performUpdateCheck() {
 				continue
 			}
 			def betaSelected = false
-				if (includeBetas) {
+				if (includesBetas) {
 				betaSelected = pkgBetaOn?.contains(state.manifests[pkg.key].packageName)
 			}
 
@@ -2231,6 +2237,10 @@ def performUpdates(runInBackground) {
 		}
 	}
 
+	def downloadedBytes = (appFiles.values()*.length().sum() ?: 0) + (driverFiles.values()*.length().sum() ?: 0)
+	logDebug "Downloaded ${appFiles.size() + driverFiles.size()} new source files totalling ${downloadedBytes} chars before starting upgrades"
+
+	def rollbackBytesHeld = 0
 	for (pkg in pkgsToUpdate) {
 		def manifest = downloadedManifests[pkg]
 		def installedManifest = state.manifests[pkg]
@@ -2250,8 +2260,13 @@ def performUpdates(runInBackground) {
 					return rollback("Failed to install bundle ${location}. Please notify the package developer.", false)
 				}
 				else
-					completedActions["bundleInstalls"] << bundleToInstall
+					completedActions["bundleInstalls"] << bundle
 			}
+
+			// installBundle can re-register the apps/drivers packaged inside the bundle under new
+			// heIDs, so the list must be refreshed after bundle installs, not before them.
+			def currentAppList = getAppList()
+			def currentDriverList = getDriverList()
 
 			for (app in manifest.apps) {
 				if (isAppInstalled(installedManifest,app.id)) {
@@ -2261,16 +2276,39 @@ def performUpdates(runInBackground) {
 							location = getItemDownloadLocation(app)
 						else
 							location = app.location
-						app.heID = getAppById(installedManifest, app.id).heID
-						app.beta = shouldInstallBeta(app) && !forceProduction(pkg, app.id)
-						def sourceCode = getAppSource(app.heID)
-						setBackgroundStatusMessage("Upgrading ${app.name}")
-						if (upgradeApp(app.heID, appFiles[location])) {
-							completedActions["appUpgrades"] << [id:app.heID,source:sourceCode]
-							if (app.oauth)
-								enableOAuth(app.heID)
+						def upgradeSucceeded = false
+						try {
+							app.heID = getAppById(installedManifest, app.id).heID
+							def resolvedHeID = resolveCurrentHeID(currentAppList, app.heID, app.name)
+							if (resolvedHeID != app.heID) {
+								getAppById(installedManifest, app.id).heID = resolvedHeID
+								app.heID = resolvedHeID
+							}
+							if (app.heID == null) {
+								// no longer exists on the hub under any ID - nothing to upgrade
+								upgradeSucceeded = true
+							}
+							else {
+								app.beta = shouldInstallBeta(app) && !forceProduction(pkg, app.id)
+								def sourceCode = getAppSource(app.heID)
+								setBackgroundStatusMessage("Upgrading ${app.name}")
+								rollbackBytesHeld += (sourceCode?.length() ?: 0)
+								logDebug "Rollback buffer holding ${rollbackBytesHeld} chars across ${completedActions['appUpgrades'].size() + completedActions['driverUpgrades'].size() + 1} items before upgrading ${app.name}"
+								if (upgradeApp(app.heID, appFiles[location])) {
+									completedActions["appUpgrades"] << [heID:app.heID,source:sourceCode]
+									if (app.oauth)
+										enableOAuth(app.heID)
+									upgradeSucceeded = true
+								}
+							}
 						}
-						else {
+						catch (e) {
+							// catches anything escaping getAppById/getAppSource/upgradeApp so a failure
+							// here is never silent - previously this could roll back with zero diagnostic info.
+							try { log.error "Unexpected error upgrading app ${app.name} (heID ${app.heID}): ${describeHttpError(e)}" } catch (ignored) {}
+							recordLastUpgradeError("Unexpected error upgrading app ${app.name} (heID ${app.heID}): ${describeHttpError(e)}")
+						}
+						if (!upgradeSucceeded) {
 							resultData.success = false
 							resultData.failed << pkg
 							resultData.message = rollback("Failed to upgrade app ${location}", runInBackground)
@@ -2337,14 +2375,37 @@ def performUpdates(runInBackground) {
 							location = getItemDownloadLocation(driver)
 						else
 							location = driver.location
-						driver.heID = getDriverById(installedManifest, driver.id).heID
-						driver.beta = shouldInstallBeta(driver) && !forceProduction(pkg, driver.id)
-						def sourceCode = getDriverSource(driver.heID)
-						setBackgroundStatusMessage("Upgrading ${driver.name}")
-						if (upgradeDriver(driver.heID, driverFiles[location])) {
-							completedActions["driverUpgrades"] << [id:driver.heID,source:sourceCode]
+						def upgradeSucceeded = false
+						try {
+							driver.heID = getDriverById(installedManifest, driver.id).heID
+							def resolvedHeID = resolveCurrentHeID(currentDriverList, driver.heID, driver.name)
+							if (resolvedHeID != driver.heID) {
+								getDriverById(installedManifest, driver.id).heID = resolvedHeID
+								driver.heID = resolvedHeID
+							}
+							if (driver.heID == null) {
+								// no longer exists on the hub under any ID - nothing to upgrade
+								upgradeSucceeded = true
+							}
+							else {
+								driver.beta = shouldInstallBeta(driver) && !forceProduction(pkg, driver.id)
+								def sourceCode = getDriverSource(driver.heID)
+								setBackgroundStatusMessage("Upgrading ${driver.name}")
+								rollbackBytesHeld += (sourceCode?.length() ?: 0)
+								logDebug "Rollback buffer holding ${rollbackBytesHeld} chars across ${completedActions['appUpgrades'].size() + completedActions['driverUpgrades'].size() + 1} items before upgrading ${driver.name}"
+								if (upgradeDriver(driver.heID, driverFiles[location])) {
+									completedActions["driverUpgrades"] << [heID:driver.heID,source:sourceCode]
+									upgradeSucceeded = true
+								}
+							}
 						}
-						else {
+						catch (e) {
+							// catches anything escaping getDriverById/getDriverSource/upgradeDriver so a failure
+							// here is never silent - previously this could roll back with zero diagnostic info.
+							try { log.error "Unexpected error upgrading driver ${driver.name} (heID ${driver.heID}): ${describeHttpError(e)}" } catch (ignored) {}
+							recordLastUpgradeError("Unexpected error upgrading driver ${driver.name} (heID ${driver.heID}): ${describeHttpError(e)}")
+						}
+						if (!upgradeSucceeded) {
 							resultData.success = false
 							resultData.failed << pkg
 							resultData.message = rollback("Failed to upgrade driver ${location}", runInBackground)
@@ -3752,7 +3813,7 @@ def enableOAuth(id) {
 }
 
 def getAppSource(id) {
-	try {
+	return withHttpRetry("Error retrieving app source", 2, 1000) {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/app/ajax/code",
@@ -3770,12 +3831,8 @@ def getAppSource(id) {
 		httpGet(params) { resp ->
 			result = resp.data.source
 		}
-		return result
+		result
 	}
-	catch (e) {
-		log.error "Error retrieving app source: ${e}"
-	}
-	return null
 }
 
 def getAppVersion(id) {
@@ -3836,7 +3893,7 @@ def installDriver(driverCode) {
 }
 
 def upgradeDriver(id,appCode) {
-	try {
+	return withHttpRetry("Error upgrading driver", 2, 1000) {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/driver/ajax/update",
@@ -3856,13 +3913,13 @@ def upgradeDriver(id,appCode) {
 		def result = false
 		httpPost(params) { resp ->
 			result = resp.data.status == "success"
+			if (!result) {
+				try { log.error "Error upgrading driver ${id}: server responded with non-success status, full response: ${resp.data}" } catch (ignored) {}
+				recordLastUpgradeError("Error upgrading driver ${id}: non-success status, full response: ${resp.data}")
+			}
 		}
-		return result
+		result
 	}
-	catch (e) {
-		log.error "Error upgrading driver ${e}"
-	}
-	return null
 }
 
 def uninstallDriver(id) {
@@ -3926,7 +3983,7 @@ def uninstallDriver(id) {
 }
 
 def getDriverSource(id) {
-	try {
+	return withHttpRetry("Error retrieving driver source", 2, 1000) {
 		def params = [
 			uri: getBaseUrl(),
 			path: "/driver/ajax/code",
@@ -3944,12 +4001,8 @@ def getDriverSource(id) {
 		httpGet(params) { resp ->
 			result = resp.data.source
 		}
-		return result
+		result
 	}
-	catch (e) {
-		log.error "Error retrieving driver source: ${e}"
-	}
-	return null
 }
 
 def getDriverVersion(id) {
@@ -4573,13 +4626,48 @@ def deleteCustomRepository(customRepositoryIdx) {
 
 def logDebug(msg) {
 	if (settings?.debugOutput != false) {
-		log.debug msg
+		// the execution's log stream can be torn down by the hub if a run overruns its allowed time
+		try { log.debug msg } catch (ignored) { }
 	}
 }
 
 def logInfo(msg) {
 	if (settings?.txtEnable != false) {
-		log.info msg
+		try { log.info msg } catch (ignored) { }
+	}
+}
+
+// Pulls out whatever extra detail the hub's HTTP exception exposes (status code, response body), since
+// ExecutorHttpResponseException's toString() alone doesn't say much beyond "status code: 500".
+def describeHttpError(e) {
+	def extra = []
+	try { extra << "status=${e.statusCode}" } catch (ignored) { }
+	try { extra << "response=${e.response?.data}" } catch (ignored) { }
+	try { extra << "response=${e.getResponse()?.getData()}" } catch (ignored) { }
+	return extra ? "${e} (${extra.join(', ')})" : "${e}"
+}
+
+// Persists diagnostic detail to atomicState so it survives even if the hub has already torn down
+// this run's log output stream (log.* calls can silently no-op at that point).
+def recordLastUpgradeError(msg) {
+	try { atomicState.lastUpgradeError = "${new Date(now())}: ${msg}" } catch (ignored) { }
+}
+
+// Retries transient hub-side failures (e.g. 500s while the hub is under load) with a short backoff.
+def withHttpRetry(context, maxAttempts, delayMs, Closure action) {
+	def attempt = 1
+	while (true) {
+		try {
+			return action.call()
+		}
+		catch (e) {
+			try { log.error "${context} (attempt ${attempt}/${maxAttempts}): ${describeHttpError(e)}" } catch (ignored) { }
+			recordLastUpgradeError("${context} (attempt ${attempt}/${maxAttempts}): ${describeHttpError(e)}")
+			if (attempt >= maxAttempts)
+				return null
+			attempt++
+			pauseExecution(delayMs)
+		}
 	}
 }
 
@@ -4768,6 +4856,25 @@ def performMigrations() {
 		app.updateSetting("autoUpdateMode", [type: "enum", value: autoUpdateMode])
 		logDebug "Converted update mode to ${autoUpdateMode}"
 	}
+}
+
+// Corrects a cached heID that no longer exists on the hub (e.g. the app/driver was deleted and
+// reinstalled, getting a new ID, without HPM's stored manifest ever being re-synced) by looking up
+// the current item list by name. Returns the input unchanged if it's still valid or no match is found.
+def resolveCurrentHeID(currentList, staleHeID, itemName) {
+	if (staleHeID != null && currentList.find { it.id == staleHeID.toString() })
+		return staleHeID
+	def match = currentList.find { it.title == itemName }
+	if (match) {
+		try { log.warn "heID for '${itemName}' was stale (${staleHeID}); found current heID ${match.id}, correcting" } catch (ignored) {}
+		return match.id
+	}
+	// Not found under the stale ID or by name - it was removed from the hub outside of HPM (e.g. an
+	// optional item the user deleted manually); treat as no longer installed rather than erroring.
+	if (staleHeID != null) {
+		try { log.warn "heID for '${itemName}' (${staleHeID}) no longer exists on the hub and no replacement was found; treating as not installed" } catch (ignored) {}
+	}
+	return null
 }
 
 def getAppList() {
