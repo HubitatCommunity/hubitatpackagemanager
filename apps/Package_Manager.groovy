@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.12
+ *  Hubitat Package Manager v1.9.13
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,8 +9,12 @@
  *
  *
  *
+ *    csteele v1.9.13   Added code to address Issue #22: Large app updates
+ *                         Added pre-flight check for Apps and Drivers in use during uninstall, requiring 2.3.6.126 and newer Platform
+ *                         Null safe when Package is in use during uninstall
+ *                         Corrected text and binary file restoration during uninstall rollback
  *    csteele v1.9.12   Added "menu" to definition metadata.
- *				   Added maintained by CSteele to banner.
+ *                         Added maintained by CSteele to banner.
  *    jono    v1.9.12   During update, self-heal stale/removed app & driver heIDs cached in state.manifests
  *                         (e.g. left behind after a driver was deleted/reinstalled on the hub, or removed
  *                         entirely outside of HPM) instead of crashing with "Stream closed" and rolling
@@ -68,7 +72,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.12"  }
+	public static String version()      {  return "v1.9.13"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -117,6 +121,7 @@ preferences {
 	page(name: "prefPkgUnMatchVerify")
 	page(name: "prefPkgUnMatchComplete")
 	page(name: "prefPkgViewUnmanaged")
+	page(name: "prefError")
 }
 
 import groovy.transform.Field
@@ -158,6 +163,22 @@ import java.util.regex.Matcher
 // method moved to the Top to possibly remediate HPM crashing during Upgrade of itself.
 def upgradeApp(id,appCode) {
 	return withHttpRetry("Error upgrading app", 2, 1000) {
+		def originalVersion = getAppVersion(id)
+		def originalLastModified
+		def metadataParams = [
+			uri: getBaseUrl(),
+			path: "/hub2/userAppTypes",
+			headers: [
+				"Cookie": state.cookie
+			],
+			timeout: 30,
+			ignoreSSLIssues: true
+		]
+		httpGet(metadataParams) { resp ->
+			originalLastModified = resp.data?.find { it.id?.toString() == id?.toString() }?.lastModified?.toString()
+		}
+		if (!originalLastModified)
+			throw new IllegalStateException("Error retrieving app editor metadata for ${id}: response did not contain lastModified")
 		def params = [
 			uri: getBaseUrl(),
 			path: "/app/ajax/update",
@@ -168,19 +189,29 @@ def upgradeApp(id,appCode) {
 			],
 			body: [
 				id: id,
-				version: getAppVersion(id),
+				version: originalVersion,
 				source: appCode
 			],
 			timeout: 420,
 			ignoreSSLIssues: true
 		]
 		def result = false
-		httpPost(params) { resp ->
-			result = resp.data.status == "success"
-			if (!result) {
-				try { log.error "Error upgrading app ${id}: server responded with non-success status, full response: ${resp.data}" } catch (ignored) {}
-				recordLastUpgradeError("Error upgrading app ${id}: non-success status, full response: ${resp.data}")
+		try {
+			httpPost(params) { resp ->
+				result = resp.data.status == "success"
+				if (!result) {
+					try { log.error "Error upgrading app ${id}: server responded with non-success status, full response: ${resp.data}" } catch (ignored) {}
+					recordLastUpgradeError("Error upgrading app ${id}: non-success status, full response: ${resp.data}")
+				}
 			}
+		}
+		catch (e) {
+			def timeoutCause = e
+			while (timeoutCause != null && !(timeoutCause instanceof java.net.SocketTimeoutException))
+				timeoutCause = timeoutCause.cause
+			if (!(timeoutCause instanceof java.net.SocketTimeoutException) || !timeoutCause.message?.toLowerCase()?.contains("read timed out"))
+				throw e
+			return waitForAppVersionChange(id, originalVersion, originalLastModified)
 		}
 		result
 	}
@@ -1658,8 +1689,25 @@ def performUninstall() {
 	if (!login())
 		return triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", false)
 
+	if (location.hub.firmwareVersionString >= "2.3.6.126") {
+		def preflight = getUninstallPreflight()
+		if (preflight.errors) {
+			def details = preflight.errors.collect { "&bull; ${it}" }.join("<br>")
+			return triggerError("Unable to Verify Package Usage", "The uninstall was not started because HPM could not verify whether all selected apps and drivers are unused.<br><br>${details}", false)
+		}
+		if (preflight.blockers) {
+			def details = preflight.blockers.collect { blocker ->
+				def usage = blocker.type == "App" ? "app instance" : "device"
+				def usageCount = blocker.count == 1 ? usage : "${usage}s"
+				return "&bull; ${blocker.packageName}: ${blocker.name} (${blocker.type}, used by ${blocker.count} ${usageCount})"
+			}.join("<br>")
+			return triggerError("Package In Use", "The uninstall was not started. Remove the following app instances or devices, then try again.<br><br>${details}", false)
+		}
+	}
+
 	for (pkgToUninstall in pkgUninstall) {
 		def pkg = state.manifests[pkgToUninstall]
+		manifestForRollback = pkg
 
 		initializeRollbackState("uninstall")
 
@@ -1717,6 +1765,50 @@ def performUninstall() {
 	}
 
 	atomicState.backgroundActionInProgress = false
+}
+
+def getUninstallPreflight() {
+	def appsToCheck = []
+	def driversToCheck = []
+	def errors = []
+
+	for (pkgToUninstall in pkgUninstall) {
+		def pkg = state.manifests[pkgToUninstall]
+		if (pkg == null) {
+			errors << "The selected package ${pkgToUninstall} is no longer installed."
+			continue
+		}
+		for (app in (pkg.apps ?: [])) {
+			if (app.heID != null)
+				appsToCheck << [packageName:pkg.packageName, item:app]
+		}
+		for (driver in (pkg.drivers ?: [])) {
+			if (driver.heID != null)
+				driversToCheck << [packageName:pkg.packageName, item:driver]
+		}
+	}
+
+	def installedApps = appsToCheck ? getAppList() : []
+	def installedDrivers = driversToCheck ? getDriverList() : []
+	def blockers = []
+
+	for (appToCheck in appsToCheck) {
+		def installedApp = installedApps.find { it.id == appToCheck.item.heID.toString() }
+		if (installedApp == null || !(installedApp.usedBy instanceof List))
+			errors << "Usage information was not available for app ${appToCheck.item.name} in ${appToCheck.packageName}."
+		else if (!installedApp.usedBy.isEmpty())
+			blockers << [packageName:appToCheck.packageName, name:appToCheck.item.name, type:"App", count:installedApp.usedBy.size()]
+	}
+
+	for (driverToCheck in driversToCheck) {
+		def installedDriver = installedDrivers.find { it.id == driverToCheck.item.heID.toString() }
+		if (installedDriver == null || !(installedDriver.usedBy instanceof List))
+			errors << "Usage information was not available for driver ${driverToCheck.item.name} in ${driverToCheck.packageName}."
+		else if (!installedDriver.usedBy.isEmpty())
+			blockers << [packageName:driverToCheck.packageName, name:driverToCheck.item.name, type:"Driver", count:installedDriver.usedBy.size()]
+	}
+
+	return [blockers:blockers, errors:errors]
 }
 
 def addUpdateDetails(pkgId, pkgName, releaseNotes, updateType, item, forceProduction = false) {
@@ -3050,6 +3142,12 @@ def getUnmanagedItems() {
 	return [apps: unmanagedApps, drivers: unmanagedDrivers]
 }
 
+def prefError() {
+	if (state.mainMenu)
+		return prefOptions()
+	return buildErrorPage(errorTitle, errorMessage)
+}
+
 def buildErrorPage(title, message) {
 	return dynamicPage(name: "prefError", title: "", install: true, uninstall: false) {
 		displayHeader()
@@ -3283,7 +3381,7 @@ def getBundleById(manifest, id) {
 }
 
 def getAppById(manifest, id) {
-	for (app in manifest.apps) {
+	for (app in manifest?.apps) {
 		if (app.id == id) {
 			return app
 		}
@@ -3292,7 +3390,7 @@ def getAppById(manifest, id) {
 }
 
 def getDriverById(manifest, id) {
-	for (driver in manifest.drivers) {
+	for (driver in manifest?.drivers) {
 		if (driver.id == id) {
 			return driver
 		}
@@ -3853,7 +3951,13 @@ def getAppVersion(id) {
 	]
 	def result
 	httpGet(params) { resp ->
-		result = resp.data.version
+		def version
+		try { version = resp.data?.version?.toString()?.toLong() } catch (ignored) {}
+		if (version == null || version < 0) {
+			def message = "Error retrieving app editor version for ${id}: response did not contain a usable numeric version"
+			throw new IllegalStateException(message)
+		}
+		result = version
 	}
 	return result
 }
@@ -4023,9 +4127,63 @@ def getDriverVersion(id) {
 	]
 	def result
 	httpGet(params) { resp ->
-		result = resp.data.version
+		def version
+		try { version = resp.data?.version?.toString()?.toLong() } catch (ignored) {}
+		if (version == null || version < 0) {
+			def message = "Error retrieving driver editor version for ${id}: response did not contain a usable numeric version"
+			throw new IllegalStateException(message)
+		}
+		result = version
 	}
 	return result
+}
+
+def waitForAppVersionChange(id, originalVersion, originalLastModified, maxWaitSeconds = 120) {
+	def originalVersionNumber
+	try { originalVersionNumber = originalVersion?.toString()?.toLong() } catch (ignored) {}
+	if (originalVersionNumber == null || originalVersionNumber < 0) {
+		def message = "Cannot poll app ${id} editor version: original version is not numeric (${originalVersion})"
+		recordLastUpgradeError(message)
+		return false
+	}
+	if (!originalLastModified) {
+		def message = "Cannot poll app ${id} editor metadata: original lastModified is missing"
+		recordLastUpgradeError(message)
+		return false
+	}
+
+	def deadline = now() + (maxWaitSeconds * 1000L)
+	while (true) {
+		try {
+			def currentLastModified
+			def params = [
+				uri: getBaseUrl(),
+				path: "/hub2/userAppTypes",
+				headers: [
+					"Cookie": state.cookie
+				],
+				timeout: 30,
+				ignoreSSLIssues: true
+			]
+			httpGet(params) { resp ->
+				currentLastModified = resp.data?.find { it.id?.toString() == id?.toString() }?.lastModified?.toString()
+			}
+			if (currentLastModified && currentLastModified != originalLastModified.toString()) {
+				return true
+			}
+		}
+		catch (e) {
+		}
+
+		def remainingMs = deadline - now()
+		if (remainingMs <= 0)
+			break
+		pauseExecution(Math.min(5000L, remainingMs).toInteger())
+	}
+
+	def message = "App ${id} editor metadata did not change within ${maxWaitSeconds} seconds after posting version ${originalVersion} timed out"
+	recordLastUpgradeError(message)
+	return false
 }
 
 // File Installation Methods
@@ -4366,7 +4524,7 @@ def rollback(error, runInBackground) {
 	if (installAction == "modify")
 		manifest = getInstalledManifest(pkgModify)
 	else if (installAction == "uninstall")
-		manifest = getInstalledManifest(pkgUninstall)
+		manifest = manifestForRollback
 	else if (installAction == "update")
 		manifest = manifestForRollback
 	setBackgroundStatusMessage("Fatal error occurred, rolling back")
@@ -4390,17 +4548,23 @@ def rollback(error, runInBackground) {
 		for (uninstalledApp in completedActions["appUninstalls"]) {
 			def newHeID = installApp(uninstalledApp.source)
 			def app = getAppById(manifest, uninstalledApp.id)
-			if (app.oauth)
+			if (app?.oauth)
 				enableOAuth(newHeID)
-			app.heID = newHeID
+			app?.heID = newHeID
 		}
 		for (uninstalledDriver in completedActions["driverUninstalls"]) {
 			def newHeID = installDriver(uninstalledDriver.source)
-			getDriverById(manifest, uninstalledDriver.id).heID = newHeID
+			def driver = getDriverById(manifest, uninstalledDriver.id)
+			driver?.heID = newHeID
 		}
 
 		for (uninstalledFile in completedActions["fileUninstalls"]) {
-			installFile(uninstalledFile.name, downloadFile(uninstalledFile.location))
+			def isBinary = uninstalledFile.transferType == "binary"
+			def location = getItemDownloadLocation(uninstalledFile)
+			def contents = isBinary ? downloadFileBinary(location) : downloadFile(location)
+			def fileInstaller = isBinary ? this.&installFileBinary : this.&installFile
+			if (contents == null || !fileInstaller(uninstalledFile.id, uninstalledFile.name, contents))
+				log.error "Failed to restore file ${uninstalledFile.name} during rollback"
 		}
 
 		for (uninstalledBundle in completedActions["bundleUninstalls"]) {
@@ -4688,7 +4852,7 @@ def getDriverList() {
 
 		try {
 			httpGet(params) { resp ->
-			resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace]} 
+			resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace, usedBy:it.usedBy]} 
 			}
 		} catch (e) {
 			log.error "Error retrieving installed drivers: ${e}"
@@ -4892,7 +5056,7 @@ def getAppList() {
 
 		try {
 			httpGet(params) { resp ->
-				resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace]} 
+				resp.data.each {result += [id:it.id.toString(), title:it.name, namespace:it.namespace, usedBy:it.usedBy]} 
 			}				
 
 		} catch (e) {
