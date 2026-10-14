@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.13
+ *  Hubitat Package Manager v1.9.14
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,10 @@
  *
  *
  *
+ *    csteele v1.9.14   Process HPM self-updates last in a separate asynchronous invocation, preventing
+ *                         old compiled code from continuing after HPM replaces and recompiles itself.
+ *                         Commit the HPM manifest and version only after the editor callback confirms success.
+ *                         Remove the premature HPM-upgraded log and version event from the download phase.
  *    csteele v1.9.13   Added code to address Issue #22: Large app updates
  *                         Added pre-flight check for Apps and Drivers in use during uninstall, requiring 2.3.6.126 and newer Platform
  *                         Null safe when Package is in use during uninstall
@@ -72,7 +76,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.13"  }
+	public static String version()      {  return "v1.9.14"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -214,6 +218,160 @@ def upgradeApp(id,appCode) {
 			return waitForAppVersionChange(id, originalVersion, originalLastModified)
 		}
 		result
+	}
+}
+
+// HPM must update itself from a separate invocation. The editor POST recompiles this
+// app, so no package-processing code may remain on the stack when that POST completes.
+def performHpmSelfUpdate() {
+	def pending = state.pendingHpmSelfUpdate
+	if (!pending?.packageLocation) {
+		log.warn "HPM self-update was scheduled without pending update state"
+		atomicState.backgroundActionInProgress = false
+		return
+	}
+
+	try {
+		if (!login()) {
+			finishHpmSelfUpdateFailure("Error logging in to the hub")
+			return
+		}
+
+		def manifest = getJSONFile(pending.packageLocation)
+		if (manifest == null) {
+			finishHpmSelfUpdateFailure("The HPM manifest ${pending.packageLocation} could not be downloaded")
+			return
+		}
+		if (shouldInstallBeta(manifest)) {
+			def betaManifest = getJSONFile(getItemDownloadLocation(manifest))
+			if (betaManifest != null) {
+				manifest = betaManifest
+				manifest.beta = true
+			}
+			else
+				manifest.beta = false
+		}
+		else
+			manifest.beta = false
+
+		def installedManifest = state.manifests[pending.packageLocation]
+		def installedHpmApp = installedManifest?.apps?.find { it.heID != null }
+		def hpmApp = manifest.apps?.find { it.id == installedHpmApp?.id }
+		if (installedHpmApp == null || hpmApp == null) {
+			finishHpmSelfUpdateFailure("The installed or downloaded HPM manifest does not contain the HPM app")
+			return
+		}
+
+		def resolvedHeID = resolveCurrentHeID(getAppList(), installedHpmApp.heID, hpmApp.name)
+		if (resolvedHeID == null) {
+			finishHpmSelfUpdateFailure("The HPM app editor entry could not be found")
+			return
+		}
+		installedHpmApp.heID = resolvedHeID
+		hpmApp.heID = resolvedHeID
+		hpmApp.beta = shouldInstallBeta(hpmApp)
+
+		def sourceLocation = getItemDownloadLocation(hpmApp)
+		setBackgroundStatusMessage("Downloading ${hpmApp.name}")
+		def sourceCode = downloadFile(sourceLocation)
+		if (sourceCode == null) {
+			finishHpmSelfUpdateFailure("The HPM source ${sourceLocation} could not be downloaded")
+			return
+		}
+
+		copyInstalledItemsToNewManifest(installedManifest, manifest)
+		state.pendingHpmSelfUpdate = pending + [manifest: manifest]
+		def editorVersion = getAppVersion(resolvedHeID)
+		def formBody = "id=${java.net.URLEncoder.encode(resolvedHeID.toString(), 'UTF-8')}" +
+			"&version=${java.net.URLEncoder.encode(editorVersion.toString(), 'UTF-8')}" +
+			"&source=${java.net.URLEncoder.encode(sourceCode, 'UTF-8')}"
+
+		def params = [
+			uri: getBaseUrl(),
+			path: "/app/ajax/update",
+			contentType: "application/json",
+			requestContentType: "application/x-www-form-urlencoded",
+			headers: [
+				"Connection": "keep-alive",
+				"Cookie": state.cookie
+			],
+			body: formBody,
+			timeout: 300,
+			ignoreSSLIssues: true
+		]
+
+		setBackgroundStatusMessage("Upgrading ${hpmApp.name}")
+		logDebug "Submitting HPM self-update request; this invocation will now end"
+		asynchttpPost("hpmSelfUpdateComplete", params)
+		return
+	}
+	catch (e) {
+		finishHpmSelfUpdateFailure("Unable to submit the HPM self-update: ${describeHttpError(e)}")
+	}
+}
+
+// This callback is deliberately stable and runs as a fresh invocation. If the editor
+// accepted the new source, Hubitat resolves this method from the newly compiled app.
+def hpmSelfUpdateComplete(resp, data) {
+	def httpStatus
+	def responseData
+	def responseHasError = false
+	try { httpStatus = resp.getStatus() } catch (ignored) { }
+	try { responseHasError = resp.hasError() } catch (ignored) { }
+	try { responseData = resp.json } catch (ignored) { }
+	if (responseData == null) {
+		try { responseData = resp.getData() } catch (ignored) { }
+	}
+
+	def responseText = responseData?.toString()
+	def editorReportedSuccess = (responseData instanceof Map && responseData.status == "success") ||
+		responseText?.contains('"status":"success"') ||
+		responseText?.contains('status:success')
+	def httpSucceeded = httpStatus != null && httpStatus >= 200 && httpStatus < 300
+	def succeeded = !responseHasError && httpSucceeded && editorReportedSuccess
+	if (!succeeded) {
+		finishHpmSelfUpdateFailure("HPM editor update failed: HTTP ${httpStatus}, response ${responseText}")
+		return
+	}
+
+	def pending = state.pendingHpmSelfUpdate
+	if (!pending?.packageLocation || !pending?.manifest) {
+		finishHpmSelfUpdateFailure("HPM editor update succeeded but pending manifest state was missing")
+		return
+	}
+
+	state.manifests[pending.packageLocation] = pending.manifest
+	minimizeStoredManifests()
+	sendLocationEvent(name: "hpmVersion", value: pending.manifest.version)
+	state.updatesNotified = false
+	state.remove("pendingHpmSelfUpdate")
+	logDebug "HPM self-update callback confirmed v${pending.manifest.version}"
+	logDebug "Updates complete"
+	if (pending.runInBackground == true) {
+		if (notifyOnSuccess) {
+			def notificationText = notifySpecificPackages ?
+				"Hubitat Package Manager was updated successfully" :
+				"The packages were updated successfully"
+			notifyUpdateSuccessDevices*.deviceNotification(buildNotification(notificationText))
+		}
+	}
+	else
+		atomicState.backgroundActionInProgress = false
+}
+
+def finishHpmSelfUpdateFailure(message) {
+	def pending = state.pendingHpmSelfUpdate
+	try { log.error message } catch (ignored) { }
+	recordLastUpgradeError(message)
+	state.remove("pendingHpmSelfUpdate")
+	if (pending?.runInBackground == true) {
+		if (notifyOnFailure)
+			notifyUpdateFailureDevices*.deviceNotification(buildNotification("Hubitat Package Manager failed to update. Check the logs for more information"))
+		app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")
+	}
+	else {
+		triggerError("HPM Self-Update Failed", message, false)
+		atomicState.backgroundActionInProgress = false
 	}
 }
 
@@ -2170,12 +2328,15 @@ def forceProduction(pkg, id) {
 }
 
 def performUpdates(runInBackground) {
-	def resultData = [success: null, succeeded: [], failed: [], message: null]
+	def resultData = [success: null, succeeded: [], failed: [], message: null, selfUpdatePending: false]
 	if (!login()) {
 		resultData.message = triggerError("Error logging in to hub", "An error occurred logging into the hub. Please verify your Hub Security username and password.", runInBackground)
 		resultData.success = false
 		return resultData
 	}
+	def hpmPackageLocation = state.repositoryListingJSON.hpm?.location
+	def hpmSelfUpdateRequested = hpmPackageLocation != null && pkgsToUpdate?.contains(hpmPackageLocation)
+	def packagesToUpdateNow = (pkgsToUpdate ?: []).findAll { it != hpmPackageLocation }
 
 	// Download all files first to reduce the chances of a network error
 	def downloadedManifests = [:]
@@ -2183,7 +2344,7 @@ def performUpdates(runInBackground) {
 	def driverFiles = [:]
 	def fileManagerFiles = [:]
 
-	for (pkg in pkgsToUpdate) {
+	for (pkg in packagesToUpdateNow) {
 		def manifest = getJSONFile(pkg)
 
 		if (shouldInstallBeta(manifest)) {
@@ -2320,9 +2481,6 @@ def performUpdates(runInBackground) {
 					}
 				}
 			}
-			if (pkg == state.repositoryListingJSON.hpm?.location)
-				sendLocationEvent(name: "hpmVersion", value: manifest.version)
-				logDebug "HPM upgraded this cycle."
 		}
 		else {
 			resultData.success = false
@@ -2336,7 +2494,7 @@ def performUpdates(runInBackground) {
 	logDebug "Downloaded ${appFiles.size() + driverFiles.size()} new source files totalling ${downloadedBytes} chars before starting upgrades"
 
 	def rollbackBytesHeld = 0
-	for (pkg in pkgsToUpdate) {
+	for (pkg in packagesToUpdateNow) {
 		def manifest = downloadedManifests[pkg]
 		def installedManifest = state.manifests[pkg]
 
@@ -2566,7 +2724,6 @@ def performUpdates(runInBackground) {
 				    return rollback("Failed to install file ${location}. Please notify the package developer.", false)
 				}
 				completedActions["fileInstalls"] << fileToInstall
-
 			}
 
 			if (state.manifests[pkg] != null)
@@ -2578,6 +2735,22 @@ def performUpdates(runInBackground) {
 		else {
 		}
 	}
+	if (hpmSelfUpdateRequested) {
+		state.pendingHpmSelfUpdate = [
+			packageLocation: hpmPackageLocation,
+			runInBackground: runInBackground == true
+		]
+		setBackgroundStatusMessage("Scheduling Hubitat Package Manager self-update")
+		if (runInBackground == true) {
+			resultData.success = true
+			resultData.selfUpdatePending = true
+			return resultData
+		}
+		runInMillis(1000, "performHpmSelfUpdate", [overwrite: true])
+		logDebug "HPM self-update scheduled; ending the current update invocation"
+		return
+	}
+
 	state.updatesNotified = false
 	logDebug "Updates complete"
 	if (runInBackground != true)
@@ -3210,7 +3383,7 @@ def checkForUpdates() {
 					result = performUpdates(true)
 					if (result.success == true) {
 						if (notifyOnSuccess) {
-							if (!notifySpecificPackages)
+							if (!notifySpecificPackages && result.selfUpdatePending != true)
 								notifyUpdateSuccessDevices*.deviceNotification(buildNotification("The packages were updated successfully"))
 							if (packagesWithUpdates.size() < allUpgradeCount)
 								app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")
@@ -3235,7 +3408,7 @@ def checkForUpdates() {
 						app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")
 					}
 				}
-				if (notifySpecificPackages) {
+				if (notifySpecificPackages && result != null) {
 					if (notifyOnSuccess) {
 						for (successful in result.succeeded) {
 							logDebug successful
@@ -3248,6 +3421,11 @@ def checkForUpdates() {
 							notifyUpdateFailureDevices*.deviceNotification(buildNotification("${state.manifests[failed].packageName} failed to update"))
 						}
 					}
+				}
+				if (result?.selfUpdatePending == true) {
+					runInMillis(1000, "performHpmSelfUpdate", [overwrite: true])
+					logDebug "HPM self-update scheduled; ending the automatic-update invocation"
+					return
 				}
 			}
 		}
@@ -4724,7 +4902,6 @@ def downloadFileManagerFiles(manifest) {
 
 		if (!isBinary && fileContents == null) {  return [sucess:false, name: location] }
 
-
 		files[location] = fileContents
 	}
 	return [success:true, files: files]
@@ -4932,6 +5109,7 @@ def renderPackageButton(pkg, i) {
 		badges += '<i class="material-icons he-zwave" title="Z-Wave"></i>'
 	if (hasTag(pkg, "Zigbee"))
 		badges += '<i class="material-icons he-zigbee" title="Zigbee"></i>'
+	if (hasTag(pkg, "Matter"))
 	if (hasTag(pkg, "Cloud"))
 		badges += '<i class="material-icons material-icons-outlined" title="Cloud" style="font-size: 14pt">cloud</i>'
 	if (hasTag(pkg, "LAN"))
