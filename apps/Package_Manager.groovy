@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.14
+ *  Hubitat Package Manager v1.9.15
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,9 @@
  *
  *
  *
+ *    csteele v1.9.15   Correct automatic-update failure notifications so the generic message is sent
+ *                         when per-package notifications are disabled, without duplicating it when
+ *                         individual package failures are available.
  *    csteele v1.9.14   Process HPM self-updates last in a separate asynchronous invocation, preventing
  *                         old compiled code from continuing after HPM replaces and recompiles itself.
  *                         Commit the HPM manifest and version only after the editor callback confirms success.
@@ -76,7 +79,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.14"  }
+	public static String version()      {  return "v1.9.15"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -3394,7 +3397,7 @@ def checkForUpdates() {
 					else {
 						log.warn "Automatic update failure: ${result}"
 						if (notifyOnFailure) {
-							if (notifySpecificPackages)
+							if (!notifySpecificPackages)
 								notifyUpdateFailureDevices*.deviceNotification(buildNotification("One or more packages failed to automatically update. Check the logs for more information"))
 							app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")
 						}
@@ -3403,7 +3406,7 @@ def checkForUpdates() {
 				catch (e) {
 					log.warn "Automatic update failure: ${e}"
 					if (notifyOnFailure) {
-						if (notifySpecificPackages)
+						if (!notifySpecificPackages || result == null)
 							notifyUpdateFailureDevices*.deviceNotification(buildNotification("One or more packages failed to automatically update. Check the logs for more information"))
 						app.updateLabel("Hubitat Package Manager <span style='color:green'>Updates Available</span>")
 					}
