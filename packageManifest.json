@@ -2,9 +2,9 @@
 	"packageName": "Hubitat Package Manager",
 	"minimumHEVersion": "2.2.1",
 	"author": "Dominick Meglio",
-	"version": "1.9.15",
-	"dateReleased": "2026/10/15",
-	"releaseNotes": "v1.9.15   Correct automatic-update failure notifications so the generic message is sent\n             when per-package notifications are disabled, without duplicating it when\n             individual package failures are available.\nv1.9.14   Process HPM self-updates last in a separate asynchronous invocation, preventing\n             old compiled code from continuing after HPM replaces and recompiles itself.\n             Commit the HPM manifest and version only after the editor callback confirms success.\n             Remove the premature HPM-upgraded log and version event from the download phase.\nv1.9.13   Added code to address Issue #22: Large app updates\n             Added pre-flight check for Apps and Drivers in use during uninstall, requiring 2.3.6.126 and newer Platform\n             Null safe when Package is in use during uninstall\n             Corrected text and binary file restoration during uninstall rollback.",
+	"version": "1.9.16",
+	"dateReleased": "2026/10/20",
+	"releaseNotes": "v1.9.16   Use the platform updateSelfFromUrl method on Hubitat Platform v2.5.3.103 and newer so HPM source replacement is deferred until the self-update invocation exits.\n             Retain the asynchronous editor fallback for older platforms and recover missing manifest handoff state during the transition from v1.9.15.\nv1.9.15   Correct automatic-update failure notifications so the generic message is sent\n             when per-package notifications are disabled, without duplicating it when\n             individual package failures are available.\nv1.9.14   Process HPM self-updates last in a separate asynchronous invocation, preventing\n             old compiled code from continuing after HPM replaces and recompiles itself.\n             Commit the HPM manifest and version only after the editor callback confirms success.\n             Remove the premature HPM-upgraded log and version event from the download phase.",
 	"documentationLink": "https://hubitatpackagemanager.hubitatcommunity.com/",
 	"communityLink": "https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471",
 	"apps" : [
