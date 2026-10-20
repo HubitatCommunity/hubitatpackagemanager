@@ -1,6 +1,6 @@
 /**
  *
- *  Hubitat Package Manager v1.9.15
+ *  Hubitat Package Manager v1.9.16
  *
  *  Copyright 2020 Dominick Meglio
  *
@@ -9,6 +9,10 @@
  *
  *
  *
+ *    csteele v1.9.16   Use the platform updateSelfFromUrl method on Hubitat Platform v2.5.3.103 and newer so
+ *                         HPM source replacement is deferred until the self-update invocation exits.
+ *                         Retain the asynchronous editor fallback for older platforms and recover
+ *                         missing manifest handoff state during the transition from v1.9.15.
  *    csteele v1.9.15   Correct automatic-update failure notifications so the generic message is sent
  *                         when per-package notifications are disabled, without duplicating it when
  *                         individual package failures are available.
@@ -79,7 +83,7 @@
  *                         added feature to identify Azure search vs sql search
  */
 
-	public static String version()      {  return "v1.9.15"  }
+	public static String version()      {  return "v1.9.16"  }
 	def getThisCopyright(){"&copy; 2020 Dominick Meglio"}
 
 definition(
@@ -224,10 +228,11 @@ def upgradeApp(id,appCode) {
 	}
 }
 
-// HPM must update itself from a separate invocation. The editor POST recompiles this
-// app, so no package-processing code may remain on the stack when that POST completes.
+// HPM must update itself from a separate invocation. On platform 2.5.3.103 and newer,
+//   updateSelfFromUrl() defers the source swap until this invocation exits. Older platforms
+//   retain the asynchronous editor fallback.
 def performHpmSelfUpdate() {
-	def pending = state.pendingHpmSelfUpdate
+	def pending = atomicState.pendingHpmSelfUpdate ?: state.pendingHpmSelfUpdate
 	if (!pending?.packageLocation) {
 		log.warn "HPM self-update was scheduled without pending update state"
 		atomicState.backgroundActionInProgress = false
@@ -235,11 +240,6 @@ def performHpmSelfUpdate() {
 	}
 
 	try {
-		if (!login()) {
-			finishHpmSelfUpdateFailure("Error logging in to the hub")
-			return
-		}
-
 		def manifest = getJSONFile(pending.packageLocation)
 		if (manifest == null) {
 			finishHpmSelfUpdateFailure("The HPM manifest ${pending.packageLocation} could not be downloaded")
@@ -264,6 +264,27 @@ def performHpmSelfUpdate() {
 			finishHpmSelfUpdateFailure("The installed or downloaded HPM manifest does not contain the HPM app")
 			return
 		}
+		hpmApp.beta = shouldInstallBeta(hpmApp)
+		copyInstalledItemsToNewManifest(installedManifest, manifest)
+
+		def sourceLocation = getItemDownloadLocation(hpmApp)
+		if (verifyHEVersion("2.5.3.103")) {
+			setBackgroundStatusMessage("Upgrading ${hpmApp.name}")
+			logDebug "Submitting HPM self-update through updateSelfFromUrl; this invocation will now end"
+			def updateAccepted = updateSelfFromUrl(sourceLocation)
+			if (!updateAccepted) {
+				finishHpmSelfUpdateFailure("Hubitat rejected the HPM self-update from ${sourceLocation}")
+				return
+			}
+
+			finishHpmSelfUpdateSuccess(pending + [manifest: manifest], "HPM self-update accepted by updateSelfFromUrl")
+			return
+		}
+
+		if (!login()) {
+			finishHpmSelfUpdateFailure("Error logging in to the hub")
+			return
+		}
 
 		def resolvedHeID = resolveCurrentHeID(getAppList(), installedHpmApp.heID, hpmApp.name)
 		if (resolvedHeID == null) {
@@ -272,9 +293,7 @@ def performHpmSelfUpdate() {
 		}
 		installedHpmApp.heID = resolvedHeID
 		hpmApp.heID = resolvedHeID
-		hpmApp.beta = shouldInstallBeta(hpmApp)
 
-		def sourceLocation = getItemDownloadLocation(hpmApp)
 		setBackgroundStatusMessage("Downloading ${hpmApp.name}")
 		def sourceCode = downloadFile(sourceLocation)
 		if (sourceCode == null) {
@@ -282,8 +301,7 @@ def performHpmSelfUpdate() {
 			return
 		}
 
-		copyInstalledItemsToNewManifest(installedManifest, manifest)
-		state.pendingHpmSelfUpdate = pending + [manifest: manifest]
+		atomicState.pendingHpmSelfUpdate = pending + [manifest: manifest]
 		def editorVersion = getAppVersion(resolvedHeID)
 		def formBody = "id=${java.net.URLEncoder.encode(resolvedHeID.toString(), 'UTF-8')}" +
 			"&version=${java.net.URLEncoder.encode(editorVersion.toString(), 'UTF-8')}" +
@@ -314,7 +332,7 @@ def performHpmSelfUpdate() {
 }
 
 // This callback is deliberately stable and runs as a fresh invocation. If the editor
-// accepted the new source, Hubitat resolves this method from the newly compiled app.
+//    accepted the new source, Hubitat resolves this method from the newly compiled app.
 def hpmSelfUpdateComplete(resp, data) {
 	def httpStatus
 	def responseData
@@ -337,18 +355,55 @@ def hpmSelfUpdateComplete(resp, data) {
 		return
 	}
 
-	def pending = state.pendingHpmSelfUpdate
+	def pending = atomicState.pendingHpmSelfUpdate ?: state.pendingHpmSelfUpdate
 	if (!pending?.packageLocation || !pending?.manifest) {
-		finishHpmSelfUpdateFailure("HPM editor update succeeded but pending manifest state was missing")
-		return
+		pending = recoverHpmSelfUpdateState(pending)
+		if (!pending?.packageLocation || !pending?.manifest) {
+			finishHpmSelfUpdateFailure("HPM editor update succeeded but pending manifest state was missing")
+			return
+		}
+		logDebug "Recovered missing HPM self-update manifest state after editor update"
 	}
 
+	finishHpmSelfUpdateSuccess(pending, "HPM self-update callback confirmed")
+}
+
+// The release which introduces updateSelfFromUrl() must itself arrive through the old
+//    editor endpoint. Recover from the known state handoff race during that final transition.
+def recoverHpmSelfUpdateState(pending) {
+	def packageLocation = pending?.packageLocation ?: state.repositoryListingJSON?.hpm?.location
+	if (!packageLocation)
+		return null
+
+	def manifest = getJSONFile(packageLocation)
+	if (manifest == null)
+		return null
+	if (shouldInstallBeta(manifest)) {
+		def betaManifest = getJSONFile(getItemDownloadLocation(manifest))
+		if (betaManifest != null) {
+			manifest = betaManifest
+			manifest.beta = true
+		}
+		else
+			manifest.beta = false
+	}
+	else
+		manifest.beta = false
+
+	def installedManifest = state.manifests[packageLocation]
+	if (installedManifest != null)
+		copyInstalledItemsToNewManifest(installedManifest, manifest)
+	return (pending ?: [:]) + [packageLocation: packageLocation, manifest: manifest]
+}
+
+def finishHpmSelfUpdateSuccess(pending, confirmationMessage) {
 	state.manifests[pending.packageLocation] = pending.manifest
 	minimizeStoredManifests()
 	sendLocationEvent(name: "hpmVersion", value: pending.manifest.version)
 	state.updatesNotified = false
+	atomicState.remove("pendingHpmSelfUpdate")
 	state.remove("pendingHpmSelfUpdate")
-	logDebug "HPM self-update callback confirmed v${pending.manifest.version}"
+	logDebug "${confirmationMessage} v${pending.manifest.version}"
 	logDebug "Updates complete"
 	if (pending.runInBackground == true) {
 		if (notifyOnSuccess) {
@@ -363,9 +418,10 @@ def hpmSelfUpdateComplete(resp, data) {
 }
 
 def finishHpmSelfUpdateFailure(message) {
-	def pending = state.pendingHpmSelfUpdate
+	def pending = atomicState.pendingHpmSelfUpdate ?: state.pendingHpmSelfUpdate
 	try { log.error message } catch (ignored) { }
 	recordLastUpgradeError(message)
+	atomicState.remove("pendingHpmSelfUpdate")
 	state.remove("pendingHpmSelfUpdate")
 	if (pending?.runInBackground == true) {
 		if (notifyOnFailure)
@@ -424,7 +480,6 @@ def appButtonHandler(btn) {
 			break
 	}
 }
-
 
 def prefOptions() {
 	state.remove("mainMenu")
@@ -2739,7 +2794,7 @@ def performUpdates(runInBackground) {
 		}
 	}
 	if (hpmSelfUpdateRequested) {
-		state.pendingHpmSelfUpdate = [
+		atomicState.pendingHpmSelfUpdate = [
 			packageLocation: hpmPackageLocation,
 			runInBackground: runInBackground == true
 		]
